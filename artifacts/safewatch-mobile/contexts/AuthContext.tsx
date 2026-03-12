@@ -13,6 +13,7 @@ import {
   clearAuth,
   setUserRole,
   onTokenRefresh,
+  isFirebaseConfigured,
 } from "@/lib/auth";
 import { apiRequest } from "@/lib/query-client";
 import { apiUrl } from "@/lib/api";
@@ -96,24 +97,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     (async () => {
-      const token = await getIdToken();
-      if (token) {
-        const userData = await fetchOrCreateUser();
-        if (userData) {
-          setUser(userData);
-          await setUserRole(userData.role);
-        } else {
-          await clearAuth();
+      try {
+        const token = await getIdToken();
+        if (token) {
+          const userData = await fetchOrCreateUser();
+          if (userData) {
+            setUser(userData);
+            await setUserRole(userData.role);
+          } else {
+            await clearAuth();
+          }
         }
+      } catch {
       }
       setIsLoading(false);
     })();
 
-    unsubRef.current = onTokenRefresh(async (newToken) => {
-      if (!newToken) {
-        setUser(null);
+    try {
+      if (isFirebaseConfigured()) {
+        unsubRef.current = onTokenRefresh(async (newToken) => {
+          if (!newToken) {
+            setUser(null);
+          }
+        });
       }
-    });
+    } catch {
+    }
 
     return () => {
       if (unsubRef.current) {

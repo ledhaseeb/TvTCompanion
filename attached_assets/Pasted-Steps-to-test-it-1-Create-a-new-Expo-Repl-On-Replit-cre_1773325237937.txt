@@ -1,0 +1,50 @@
+Steps to test it
+1. Create a new Expo Repl
+
+On Replit, create a new Repl using the Expo template
+Copy everything from the mobile/ folder in this project into the root of that new Repl
+2. Install the dependencies
+Run this in the new Repl's shell:
+
+npx expo install expo-router expo-constants expo-linking expo-status-bar expo-web-browser expo-av react-native-gesture-handler react-native-reanimated react-native-safe-area-context react-native-screens react-native-webview react-native-youtube-iframe @react-native-async-storage/async-storage @react-native-community/slider firebase @react-native-google-signin/google-signin react-native-google-cast
+3. Set up environment variables
+In the new Repl's Secrets, add:
+
+EXPO_PUBLIC_API_URL — the URL of this app (your SafeWatch backend). You can find it in the browser bar of the preview pane here.
+EXPO_PUBLIC_FIREBASE_API_KEY — your Firebase API key
+EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN — e.g. your-project.firebaseapp.com
+EXPO_PUBLIC_FIREBASE_PROJECT_ID — your Firebase project ID
+EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID — for Google Sign-In (from Firebase Console)
+4. Run it
+
+npx expo start --port 8081
+This launches Expo, and you can scan the QR code with the Expo Go app on your phone to test it.
+
+What works in Expo Go vs. what needs a dev build
+Feature	Expo Go	Dev Client Build
+Email/password login	Works	Works
+Google Sign-In	No	Yes
+Chromecast	No	Yes
+AirPlay background audio	No	Yes
+YouTube playback	Works	Works
+Session management	Works	Works
+For basic testing (logging in, picking kids, configuring sessions, watching videos), Expo Go is fine. Google Sign-In and Chromecast require building a dev client with npx expo prebuild and npx expo run:ios or run:android.
+
+Would you like me to help with anything specific about the setup?
+
+Mobile
+can you do the previous instructions?
+
+Let me read the relevant skill to understand how to set this up properly.
+
+Loaded create-artifact skill
+Unfortunately, this project doesn't support creating an Expo artifact directly. The companion app in the mobile/ directory is designed to run in a separate Expo project.
+
+Here's what I'd recommend:
+
+Create a new Repl using the Expo template — you can do that from the Replit dashboard
+Once it's set up, copy the contents of the mobile/ folder from this project into it
+Install the dependencies and configure the environment variables as I described in my previous message
+The mobile app is built to point at this SafeWatch backend via the EXPO_PUBLIC_API_URL environment variable, so the two projects work together — this one runs the backend and web app, while the Expo Repl runs the mobile companion.
+
+Would you like me to help with anything else to prepare for that setup?

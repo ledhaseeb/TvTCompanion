@@ -26,12 +26,26 @@ function getFirebaseConfig() {
   };
 }
 
+let firebaseConfigured = false;
+
+export function isFirebaseConfigured(): boolean {
+  return firebaseConfigured;
+}
+
 export function getFirebaseAuth(): Auth {
   if (firebaseAuth) return firebaseAuth;
 
+  const config = getFirebaseConfig();
+  if (!config.apiKey) {
+    throw new Error(
+      "Firebase is not configured. Set EXPO_PUBLIC_FIREBASE_API_KEY and other Firebase environment variables.",
+    );
+  }
+
   const apps = getApps();
-  const app = apps.length > 0 ? getApp() : initializeApp(getFirebaseConfig());
+  const app = apps.length > 0 ? getApp() : initializeApp(config);
   firebaseAuth = getAuth(app);
+  firebaseConfigured = true;
   return firebaseAuth;
 }
 
@@ -71,6 +85,7 @@ export async function signInWithGoogleToken(
 export function onTokenRefresh(
   callback: (token: string | null) => void,
 ): () => void {
+  if (!firebaseConfigured) return () => {};
   const auth = getFirebaseAuth();
   return onIdTokenChanged(auth, async (user: User | null) => {
     if (user) {
@@ -94,6 +109,12 @@ export async function refreshToken(): Promise<string | null> {
 }
 
 export async function getIdToken(): Promise<string | null> {
+  if (!firebaseConfigured) {
+    if (cachedToken) return cachedToken;
+    const token = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
+    cachedToken = token;
+    return token;
+  }
   const auth = getFirebaseAuth();
   const user = auth.currentUser;
   if (user) {
