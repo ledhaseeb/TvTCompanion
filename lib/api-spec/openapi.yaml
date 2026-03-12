@@ -3,13 +3,23 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: SafeWatch API specification
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: users
+    description: User operations
+  - name: children
+    description: Children operations
+  - name: sessions
+    description: Session operations
+  - name: feedback
+    description: Feedback operations
+  - name: caregivers
+    description: Caregiver operations
 paths:
   /healthz:
     get:
@@ -24,6 +34,190 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /users/me:
+    get:
+      operationId: getCurrentUser
+      tags: [users]
+      summary: Get current user profile
+      responses:
+        "200":
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "404":
+          description: User not found
+    post:
+      operationId: createUser
+      tags: [users]
+      summary: Create user on first sign-up
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserBody"
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+  /children:
+    get:
+      operationId: listChildren
+      tags: [children]
+      summary: List children for current user
+      responses:
+        "200":
+          description: List of children
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Child"
+  /sessions/playlist:
+    post:
+      operationId: generatePlaylist
+      tags: [sessions]
+      summary: Generate a playlist for a session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlaylistRequest"
+      responses:
+        "200":
+          description: Generated playlist
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlaylistResponse"
+  /sessions:
+    post:
+      operationId: createSession
+      tags: [sessions]
+      summary: Create a new viewing session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSessionBody"
+      responses:
+        "201":
+          description: Session created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+  /sessions/{id}:
+    patch:
+      operationId: updateSession
+      tags: [sessions]
+      summary: Update/end a session
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSessionBody"
+      responses:
+        "200":
+          description: Session updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+  /watch-history:
+    post:
+      operationId: recordWatchHistory
+      tags: [sessions]
+      summary: Record a video watch entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WatchHistoryBody"
+      responses:
+        "201":
+          description: Watch history recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WatchHistoryEntry"
+  /feedback/{sessionId}/complete:
+    post:
+      operationId: submitFeedback
+      tags: [feedback]
+      summary: Submit session feedback
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FeedbackBody"
+      responses:
+        "200":
+          description: Feedback submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeedbackResult"
+  /caregivers/invite/{token}:
+    get:
+      operationId: validateInvite
+      tags: [caregivers]
+      summary: Validate a caregiver invite token
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Valid invite
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InviteInfo"
+        "404":
+          description: Invalid or expired invite
+  /caregivers/accept:
+    post:
+      operationId: acceptInvite
+      tags: [caregivers]
+      summary: Accept a caregiver invitation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AcceptInviteBody"
+      responses:
+        "200":
+          description: Invite accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +227,313 @@ components:
           type: string
       required:
         - status
-
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        firebaseUid:
+          type: string
+        email:
+          type: string
+        displayName:
+          type: ["string", "null"]
+        role:
+          type: string
+        parentAccountId:
+          type: ["string", "null"]
+        isFoundingMember:
+          type: integer
+      required:
+        - id
+        - firebaseUid
+        - email
+        - role
+        - isFoundingMember
+    CreateUserBody:
+      type: object
+      properties:
+        displayName:
+          type: string
+    Child:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        name:
+          type: string
+        birthMonth:
+          type: integer
+        birthYear:
+          type: integer
+        entertainmentMinutes:
+          type: integer
+        ageRestrictionOverride:
+          type: ["integer", "null"]
+        favouritesAgeBypass:
+          type: integer
+        eveningProtectionEnabled:
+          type: integer
+        eveningProtectionStartHour:
+          type: integer
+        eveningProtectionMaxStim:
+          type: integer
+        sensitivity:
+          type: ["string", "null"]
+      required:
+        - id
+        - userId
+        - name
+        - birthMonth
+        - birthYear
+        - entertainmentMinutes
+        - favouritesAgeBypass
+        - eveningProtectionEnabled
+        - eveningProtectionStartHour
+        - eveningProtectionMaxStim
+    Video:
+      type: object
+      properties:
+        id:
+          type: string
+        youtubeId:
+          type: string
+        title:
+          type: string
+        channelId:
+          type: ["string", "null"]
+        youtubeChannelId:
+          type: ["string", "null"]
+        youtubeChannelTitle:
+          type: ["string", "null"]
+        seriesId:
+          type: ["string", "null"]
+        seriesName:
+          type: ["string", "null"]
+        durationSeconds:
+          type: integer
+        stimulationLevel:
+          type: integer
+        ageMin:
+          type: ["integer", "null"]
+        ageMax:
+          type: ["integer", "null"]
+        thumbnailUrl:
+          type: ["string", "null"]
+        customThumbnailUrl:
+          type: ["string", "null"]
+        isPublished:
+          type: integer
+        isEmbeddable:
+          type: integer
+      required:
+        - id
+        - youtubeId
+        - title
+        - durationSeconds
+        - stimulationLevel
+        - isPublished
+        - isEmbeddable
+    PlaylistRequest:
+      type: object
+      properties:
+        childIds:
+          type: array
+          items:
+            type: string
+        sessionMinutes:
+          type: integer
+        taperMode:
+          type: string
+        flatlineLevel:
+          type: integer
+      required:
+        - childIds
+        - sessionMinutes
+        - taperMode
+        - flatlineLevel
+    PlaylistResponse:
+      type: object
+      properties:
+        playlist:
+          type: array
+          items:
+            $ref: "#/components/schemas/Video"
+        calmingVideos:
+          type: array
+          items:
+            $ref: "#/components/schemas/Video"
+        replacementCandidates:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              $ref: "#/components/schemas/Video"
+      required:
+        - playlist
+        - calmingVideos
+    CreateSessionBody:
+      type: object
+      properties:
+        childIds:
+          type: array
+          items:
+            type: string
+        totalDurationSeconds:
+          type: integer
+        taperMode:
+          type: string
+        flatlineLevel:
+          type: integer
+        includeWindDown:
+          type: boolean
+        finishMode:
+          type: string
+      required:
+        - childIds
+        - totalDurationSeconds
+        - taperMode
+        - flatlineLevel
+        - includeWindDown
+        - finishMode
+    Session:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        childIds:
+          type: array
+          items:
+            type: string
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: ["string", "null"]
+          format: date-time
+        totalMinutesWatched:
+          type: number
+        status:
+          type: string
+        taperMode:
+          type: string
+        flatlineLevel:
+          type: integer
+        includeWindDown:
+          type: integer
+        finishMode:
+          type: string
+      required:
+        - id
+        - userId
+        - childIds
+        - startTime
+        - status
+        - taperMode
+        - flatlineLevel
+        - includeWindDown
+        - finishMode
+    UpdateSessionBody:
+      type: object
+      properties:
+        endedAt:
+          type: string
+          format: date-time
+        totalDurationSeconds:
+          type: integer
+    WatchHistoryBody:
+      type: object
+      properties:
+        videoId:
+          type: string
+        childIds:
+          type: array
+          items:
+            type: string
+        sessionId:
+          type: string
+        durationSeconds:
+          type: integer
+        stimulationLevel:
+          type: integer
+      required:
+        - videoId
+        - childIds
+        - sessionId
+        - durationSeconds
+        - stimulationLevel
+    WatchHistoryEntry:
+      type: object
+      properties:
+        id:
+          type: string
+        videoId:
+          type: string
+        sessionId:
+          type: string
+        durationSeconds:
+          type: integer
+        stimulationLevel:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - videoId
+        - sessionId
+        - durationSeconds
+        - stimulationLevel
+        - createdAt
+    FeedbackBody:
+      type: object
+      properties:
+        skipped:
+          type: boolean
+        behaviorRatings:
+          type: array
+          items:
+            $ref: "#/components/schemas/BehaviorRating"
+        participationPcts:
+          type: object
+          additionalProperties:
+            type: number
+      required:
+        - skipped
+        - behaviorRatings
+        - participationPcts
+    BehaviorRating:
+      type: object
+      properties:
+        childId:
+          type: string
+        behaviorRating:
+          type: string
+      required:
+        - childId
+        - behaviorRating
+    FeedbackResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+      required:
+        - success
+    InviteInfo:
+      type: object
+      properties:
+        email:
+          type: string
+        parentName:
+          type: string
+    AcceptInviteBody:
+      type: object
+      properties:
+        token:
+          type: string
+      required:
+        - token

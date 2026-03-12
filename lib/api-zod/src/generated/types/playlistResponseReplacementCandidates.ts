@@ -5,7 +5,6 @@
  * SafeWatch API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { Video } from "./video";
 
-export interface HealthStatus {
-  status: string;
-}
+export type PlaylistResponseReplacementCandidates = { [key: string]: Video[] };
