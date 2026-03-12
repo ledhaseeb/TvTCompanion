@@ -14,7 +14,7 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/contexts/AuthContext";
-import { signInWithEmail, signUpWithEmail } from "@/lib/auth";
+import { signInWithEmail, signUpWithEmail, signInWithGoogle } from "@/lib/auth";
 import { colors, spacing, borderRadius } from "@/constants/colors";
 
 export default function LoginScreen() {
@@ -87,6 +87,26 @@ export default function LoginScreen() {
         setError("Please enter a valid email address");
       } else {
         setError(firebaseErr.message || "Authentication failed");
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const idToken = await signInWithGoogle();
+      await login(idToken);
+    } catch (err: unknown) {
+      const firebaseErr = err as { code?: string; message?: string };
+      if (firebaseErr.code === "auth/popup-closed-by-user") {
+        setError(null);
+      } else if (firebaseErr.code === "auth/popup-blocked") {
+        setError("Pop-up was blocked. Please allow pop-ups and try again.");
+      } else {
+        setError(firebaseErr.message || "Google sign-in failed");
       }
     } finally {
       setSubmitting(false);
@@ -189,6 +209,23 @@ export default function LoginScreen() {
                 {isSignUp ? "Create Account" : "Sign In"}
               </Text>
             )}
+          </TouchableOpacity>
+
+          <View style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>or</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          <TouchableOpacity
+            style={[styles.googleButton, submitting && styles.buttonDisabled]}
+            onPress={handleGoogleSignIn}
+            disabled={submitting}
+            activeOpacity={0.8}
+            testID="button-google"
+          >
+            <Text style={styles.googleG}>G</Text>
+            <Text style={styles.googleButtonText}>Continue with Google</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -336,6 +373,43 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: 17,
     fontFamily: "Inter_600SemiBold",
+  },
+  dividerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginVertical: 4,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.border,
+  },
+  dividerText: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    color: colors.textTertiary,
+  },
+  googleButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.md,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  googleG: {
+    fontSize: 20,
+    fontFamily: "Inter_700Bold",
+    color: "#4285F4",
+  },
+  googleButtonText: {
+    fontSize: 16,
+    fontFamily: "Inter_500Medium",
+    color: colors.text,
   },
   switchButton: {
     alignItems: "center",

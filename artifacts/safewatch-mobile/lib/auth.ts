@@ -5,6 +5,7 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signInWithCredential,
+  signInWithPopup,
   GoogleAuthProvider,
   onIdTokenChanged,
   signOut as firebaseSignOut,
@@ -78,6 +79,15 @@ export async function signInWithGoogleToken(
   const credential = GoogleAuthProvider.credential(googleIdToken);
   const cred = await signInWithCredential(auth, credential);
   const idToken = await cred.user.getIdToken();
+  await setAuthToken(idToken);
+  return idToken;
+}
+
+export async function signInWithGoogle(): Promise<string> {
+  const auth = getFirebaseAuth();
+  const provider = new GoogleAuthProvider();
+  const result = await signInWithPopup(auth, provider);
+  const idToken = await result.user.getIdToken();
   await setAuthToken(idToken);
   return idToken;
 }
