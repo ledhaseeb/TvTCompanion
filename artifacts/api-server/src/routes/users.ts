@@ -57,19 +57,8 @@ router.post("/users/me", authMiddleware, async (req: AuthRequest, res: Response)
     return;
   }
 
-  const admin = await import("firebase-admin");
-  let email = "";
-  let displayName = req.body?.displayName || null;
-
-  try {
-    const firebaseUser = await admin.default.auth().getUser(req.firebaseUid);
-    email = firebaseUser.email || "";
-    if (!displayName) {
-      displayName = firebaseUser.displayName || null;
-    }
-  } catch {
-    email = "unknown@example.com";
-  }
+  const email = req.body?.email || "";
+  const displayName = req.body?.displayName || null;
 
   const [user] = await db
     .insert(usersTable)

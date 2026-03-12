@@ -14,6 +14,7 @@ import {
   setUserRole,
   onTokenRefresh,
   isFirebaseConfigured,
+  getFirebaseAuth,
 } from "@/lib/auth";
 import { apiRequest } from "@/lib/query-client";
 import { apiUrl } from "@/lib/api";
@@ -55,10 +56,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (getRes.status === 404 || getRes.status === 401) {
+        let email = "";
+        let displayName = null;
+        try {
+          const auth = getFirebaseAuth();
+          const currentUser = auth.currentUser;
+          if (currentUser) {
+            email = currentUser.email || "";
+            displayName = currentUser.displayName || null;
+          }
+        } catch {}
         const createRes = await fetch(apiUrl("/api/users/me"), {
           method: "POST",
           headers: { ...headers, "Content-Type": "application/json" },
-          body: JSON.stringify({}),
+          body: JSON.stringify({ email, displayName }),
         });
         if (createRes.ok) {
           return await createRes.json();

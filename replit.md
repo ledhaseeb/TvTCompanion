@@ -15,24 +15,26 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - **Validation**: Zod (`zod/v4`), `drizzle-zod`
 - **API codegen**: Orval (from OpenAPI spec)
 - **Build**: esbuild (CJS bundle)
+- **Mobile**: Expo (React Native) with expo-router
 
 ## Structure
 
 ```text
 artifacts-monorepo/
 ├── artifacts/              # Deployable applications
-│   └── api-server/         # Express API server
+│   ├── api-server/         # Express API server
+│   └── safewatch-mobile/   # Expo React Native mobile app
 ├── lib/                    # Shared libraries
 │   ├── api-spec/           # OpenAPI spec + Orval codegen config
 │   ├── api-client-react/   # Generated React Query hooks
 │   ├── api-zod/            # Generated Zod schemas from OpenAPI
 │   └── db/                 # Drizzle ORM schema + DB connection
 ├── scripts/                # Utility scripts (single workspace package)
-│   └── src/                # Individual .ts scripts, run via `pnpm --filter @workspace/scripts run <script>`
-├── pnpm-workspace.yaml     # pnpm workspace (artifacts/*, lib/*, lib/integrations/*, scripts)
-├── tsconfig.base.json      # Shared TS options (composite, bundler resolution, es2022)
-├── tsconfig.json           # Root TS project references
-└── package.json            # Root package with hoisted devDeps
+│   └── src/                # Individual .ts scripts
+├── pnpm-workspace.yaml
+├── tsconfig.base.json
+├── tsconfig.json
+└── package.json
 ```
 
 ## TypeScript & Composite Projects
@@ -57,20 +59,72 @@ Express 5 API server. Routes live in `src/routes/` and use `@workspace/api-zod` 
 - Entry: `src/index.ts` — reads `PORT`, starts Express
 - App setup: `src/app.ts` — mounts CORS, JSON/urlencoded parsing, routes at `/api`
 - Routes: `src/routes/index.ts` mounts sub-routers; `src/routes/health.ts` exposes `GET /health` (full path: `/api/health`)
+- Auth: `src/middlewares/auth.ts` — verifies Firebase ID tokens using Google's public signing keys (no service account needed). Extracts `firebaseUid` and looks up the user in the database.
 - Depends on: `@workspace/db`, `@workspace/api-zod`
 - `pnpm --filter @workspace/api-server run dev` — run the dev server
 - `pnpm --filter @workspace/api-server run build` — production esbuild bundle (`dist/index.cjs`)
-- Build bundles an allowlist of deps (express, cors, pg, drizzle-orm, zod, etc.) and externalizes the rest
+
+#### API Routes
+
+- `GET/POST /api/users/me` — get or create user profile (Firebase auth required)
+- `GET /api/children` — list children for the authenticated user
+- `POST /api/sessions/playlist` — generate a playlist based on session config
+- `POST /api/sessions` — create a new viewing session
+- `PATCH /api/sessions/:id` — update/end a session
+- `POST /api/watch-history` — record a video watch entry
+- `POST /api/feedback/:sessionId/complete` — submit post-session behavior feedback
+- `GET /api/caregivers/invite/:token` — validate a caregiver invite
+- `POST /api/caregivers/accept` — accept a caregiver invite
+
+### `artifacts/safewatch-mobile` (`@workspace/safewatch-mobile`)
+
+Expo React Native companion app for SafeWatch — manages children's screen time with YouTube video playback.
+
+- **Auth**: Firebase email/password + Google Sign-In (Google requires dev client build)
+- **Navigation**: expo-router with stack navigation (no tabs)
+- **Screens**: Login → Children Selection → Session Config → Playlist Preview → Player → Feedback
+- **YouTube**: react-native-youtube-iframe for embedded playback
+- **Chromecast**: Stubbed CastContext (requires dev client build for real Chromecast)
+- **State**: React Context (AuthContext, SessionContext, CastContext) + React Query
+
+#### Key Files
+
+- `app/index.tsx` — Login screen (email/password auth)
+- `app/invite.tsx` — Caregiver invitation acceptance
+- `app/(main)/children.tsx` — Child selection grid
+- `app/(main)/session-config.tsx` — Duration, energy pattern, wind-down settings
+- `app/(main)/playlist-preview.tsx` — Review/shuffle/replace playlist before starting
+- `app/(main)/player.tsx` — YouTube player with session timer and controls
+- `app/(main)/session-feedback.tsx` — Post-session behavior rating
+- `lib/auth.ts` — Firebase auth wrapper (signIn, signUp, token management)
+- `lib/api.ts` — API URL configuration
+- `lib/query-client.ts` — React Query client with auth header injection
+- `contexts/AuthContext.tsx` — Auth state provider
+- `contexts/SessionContext.tsx` — Active session state provider
+
+#### Environment Variables (Mobile)
+
+- `EXPO_PUBLIC_FIREBASE_API_KEY` — Firebase web API key
+- `EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN` — Firebase auth domain
+- `EXPO_PUBLIC_FIREBASE_PROJECT_ID` — Firebase project ID
+- `EXPO_PUBLIC_DOMAIN` — auto-set to `REPLIT_DEV_DOMAIN` for API calls
+
+#### Environment Variables (Backend)
+
+- `FIREBASE_PROJECT_ID` — for token verification (issuer/audience check)
+- `FIREBASE_CLIENT_EMAIL` — stored but not currently required (public key verification)
 
 ### `lib/db` (`@workspace/db`)
 
 Database layer using Drizzle ORM with PostgreSQL. Exports a Drizzle client instance and schema models.
 
-- `src/index.ts` — creates a `Pool` + Drizzle instance, exports schema
-- `src/schema/index.ts` — barrel re-export of all models
-- `src/schema/<modelname>.ts` — table definitions with `drizzle-zod` insert schemas (no models definitions exist right now)
-- `drizzle.config.ts` — Drizzle Kit config (requires `DATABASE_URL`, automatically provided by Replit)
-- Exports: `.` (pool, db, schema), `./schema` (schema only)
+- `src/schema/users.ts` — users table (Firebase UID, email, role, parent account link)
+- `src/schema/children.ts` — children table (name, birth date, entertainment limits, evening protection)
+- `src/schema/videos.ts` — videos table (YouTube ID, title, duration, stimulation level, age range)
+- `src/schema/sessions.ts` — sessions table (taper mode, flatline level, wind-down, finish mode)
+- `src/schema/watchHistory.ts` — watch history entries per session
+- `src/schema/feedback.ts` — session feedback + behavior ratings per child
+- `src/schema/caregiverInvites.ts` — caregiver invitation tokens
 
 Production migrations are handled by Replit when publishing. In development, we just use `pnpm --filter @workspace/db run push`, and we fallback to `pnpm --filter @workspace/db run push-force`.
 
@@ -85,12 +139,12 @@ Run codegen: `pnpm --filter @workspace/api-spec run codegen`
 
 ### `lib/api-zod` (`@workspace/api-zod`)
 
-Generated Zod schemas from the OpenAPI spec (e.g. `HealthCheckResponse`). Used by `api-server` for response validation.
+Generated Zod schemas from the OpenAPI spec. Used by `api-server` for response validation.
 
 ### `lib/api-client-react` (`@workspace/api-client-react`)
 
-Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useHealthCheck`, `healthCheck`).
+Generated React Query hooks and fetch client from the OpenAPI spec.
 
 ### `scripts` (`@workspace/scripts`)
 
-Utility scripts package. Each script is a `.ts` file in `src/` with a corresponding npm script in `package.json`. Run scripts via `pnpm --filter @workspace/scripts run <script>`. Scripts can import any workspace package (e.g., `@workspace/db`) by adding it as a dependency in `scripts/package.json`.
+Utility scripts package. Each script is a `.ts` file in `src/` with a corresponding npm script in `package.json`. Run scripts via `pnpm --filter @workspace/scripts run <script>`.
