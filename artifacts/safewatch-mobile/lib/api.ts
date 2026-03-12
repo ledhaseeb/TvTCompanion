@@ -1,7 +1,6 @@
-const API_URL = process.env.EXPO_PUBLIC_API_URL
-  || (process.env.EXPO_PUBLIC_DOMAIN
-    ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
-    : "http://localhost:5000");
+const API_URL = process.env.EXPO_PUBLIC_DOMAIN
+  ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
+  : "http://localhost:5000";
 
 export function getApiUrl(): string {
   return API_URL;
