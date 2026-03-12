@@ -41,10 +41,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const unsubRef = useRef<(() => void) | null>(null);
 
-  const fetchOrCreateUser = useCallback(async (): Promise<AppUser | null> => {
+  const fetchOrCreateUser = useCallback(async (freshToken?: string): Promise<AppUser | null> => {
     try {
-      const token = await getIdToken();
+      let token = freshToken;
+      if (!token) {
+        try {
+          const auth = getFirebaseAuth();
+          const currentUser = auth.currentUser;
+          if (currentUser) {
+            token = await currentUser.getIdToken(true);
+            await setAuthToken(token);
+          }
+        } catch {}
+      }
+      if (!token) {
+        token = await getIdToken();
+      }
       if (!token) return null;
+
       const headers: Record<string, string> = {
         Authorization: `Bearer ${token}`,
       };
@@ -55,29 +69,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return await getRes.json();
       }
 
-      if (getRes.status === 404 || getRes.status === 401) {
-        let email = "";
-        let displayName = null;
-        try {
-          const auth = getFirebaseAuth();
-          const currentUser = auth.currentUser;
-          if (currentUser) {
-            email = currentUser.email || "";
-            displayName = currentUser.displayName || null;
-          }
-        } catch {}
-        const createRes = await fetch(apiUrl("/api/users/me"), {
-          method: "POST",
-          headers: { ...headers, "Content-Type": "application/json" },
-          body: JSON.stringify({ email, displayName }),
-        });
-        if (createRes.ok) {
-          return await createRes.json();
+      let email = "";
+      let displayName = null;
+      try {
+        const auth = getFirebaseAuth();
+        const currentUser = auth.currentUser;
+        if (currentUser) {
+          email = currentUser.email || "";
+          displayName = currentUser.displayName || null;
         }
+      } catch {}
+
+      const createRes = await fetch(apiUrl("/api/users/me"), {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ email, displayName }),
+      });
+      if (createRes.ok) {
+        return await createRes.json();
       }
 
+      const errText = await createRes.text().catch(() => "");
+      console.warn("fetchOrCreateUser failed:", getRes.status, createRes.status, errText);
       return null;
-    } catch {
+    } catch (err) {
+      console.warn("fetchOrCreateUser error:", err);
       return null;
     }
   }, []);
@@ -85,7 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(
     async (firebaseIdToken: string) => {
       await setAuthToken(firebaseIdToken);
-      const userData = await fetchOrCreateUser();
+      const userData = await fetchOrCreateUser(firebaseIdToken);
       if (userData) {
         setUser(userData);
         await setUserRole(userData.role);
