@@ -24,3 +24,12 @@ expertMode = true
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 20000
+
+[userenv]
+
+[userenv.shared]
+EXPO_PUBLIC_FIREBASE_API_KEY = "AIzaSyBJY4oWuqCCWv73Q3UIF4aLhVWwbZvn9Lk"
+EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN = "tvtantrum-yt-app.firebaseapp.com"
+EXPO_PUBLIC_FIREBASE_PROJECT_ID = "tvtantrum-yt-app"
+FIREBASE_PROJECT_ID = "tvtantrum-yt-app"
+FIREBASE_CLIENT_EMAIL = "firebase-adminsdk-fbsvc@tvtantrum-yt-app.iam.gserviceaccount.com"
