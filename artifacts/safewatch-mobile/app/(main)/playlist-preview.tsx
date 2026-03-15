@@ -477,7 +477,7 @@ export default function PlaylistPreviewScreen() {
                   { color: overshootColor },
                 ]}
               >
-                +{overflowMinutes}m
+                {hasOverflow ? `+${overflowMinutes}m` : "0m"}
               </Text>
             </View>
             <View style={styles.sessionInfoColRight}>
