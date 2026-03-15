@@ -32,7 +32,6 @@ const DARK = {
   textMuted: "#64748b",
   progressBg: "#1e293b",
   overflow: "#ef4444",
-  warning: "#f59e0b",
 };
 
 const STIM_LABELS: Record<number, string> = {
@@ -317,10 +316,13 @@ export default function PlaylistPreviewScreen() {
   const overflowSeconds = Math.max(0, totalDuration - sessionSeconds);
   const overflowMinutes = Math.ceil(overflowSeconds / 60);
   const hasOverflow = overflowSeconds > 0;
-  const progressPercent = Math.min(
-    100,
-    sessionSeconds > 0 ? (totalDuration / sessionSeconds) * 100 : 0,
-  );
+  const overflowPercent = sessionSeconds > 0 ? (overflowSeconds / sessionSeconds) * 100 : 0;
+
+  const overshootColor = !hasOverflow || overflowPercent < 10
+    ? "#22c55e"
+    : overflowPercent <= 20
+      ? "#f59e0b"
+      : "#ef4444";
 
   const endTime = useMemo(() => {
     const now = new Date();
@@ -461,33 +463,28 @@ export default function PlaylistPreviewScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.sessionInfoCard}>
-          <View style={styles.sessionInfoHeader}>
-            <View style={styles.sessionInfoLeft}>
+          <View style={styles.sessionInfoRow}>
+            <View style={styles.sessionInfoCol}>
               <Feather name="settings" size={14} color={DARK.textSecondary} />
               <Text style={styles.sessionInfoLabel}>
-                Session: {sessionMinutes}m
+                {sessionMinutes}m
               </Text>
             </View>
-            {hasOverflow && (
-              <View style={styles.overflowBadge}>
-                <Text style={styles.overflowText}>+{overflowMinutes}m</Text>
-              </View>
-            )}
+            <View style={styles.sessionInfoColCenter}>
+              <Text
+                style={[
+                  styles.overshootText,
+                  { color: overshootColor },
+                ]}
+              >
+                +{overflowMinutes}m
+              </Text>
+            </View>
+            <View style={styles.sessionInfoColRight}>
+              <Feather name="clock" size={14} color={DARK.textSecondary} />
+              <Text style={styles.endTimeText}>Ends {endTime}</Text>
+            </View>
           </View>
-          <View style={styles.progressBarBg}>
-            <View
-              style={[
-                styles.progressBarFill,
-                {
-                  width: `${Math.min(progressPercent, 100)}%`,
-                  backgroundColor: hasOverflow
-                    ? DARK.warning
-                    : DARK.accent,
-                },
-              ]}
-            />
-          </View>
-          <Text style={styles.endTimeText}>Ends {endTime}</Text>
         </View>
 
         {hasOverflow && (
@@ -731,50 +728,37 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: DARK.cardBorder,
   },
-  sessionInfoHeader: {
+  sessionInfoRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: spacing.sm,
   },
-  sessionInfoLeft: {
+  sessionInfoCol: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  sessionInfoColCenter: {
+    alignItems: "center",
+  },
+  sessionInfoColRight: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
   },
   sessionInfoLabel: {
-    fontSize: 14,
-    fontFamily: "Inter_500Medium",
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
     color: DARK.text,
   },
-  overflowBadge: {
-    backgroundColor: "rgba(239, 68, 68, 0.15)",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: borderRadius.sm,
-    borderWidth: 1,
-    borderColor: "rgba(239, 68, 68, 0.3)",
-  },
-  overflowText: {
-    fontSize: 13,
-    fontFamily: "Inter_600SemiBold",
-    color: DARK.overflow,
-  },
-  progressBarBg: {
-    height: 6,
-    backgroundColor: DARK.progressBg,
-    borderRadius: 3,
-    overflow: "hidden",
-    marginBottom: spacing.xs,
-  },
-  progressBarFill: {
-    height: "100%",
-    borderRadius: 3,
+  overshootText: {
+    fontSize: 15,
+    fontFamily: "Inter_700Bold",
   },
   endTimeText: {
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: "Inter_400Regular",
-    color: DARK.textMuted,
+    color: DARK.textSecondary,
   },
   warningText: {
     fontSize: 12,
