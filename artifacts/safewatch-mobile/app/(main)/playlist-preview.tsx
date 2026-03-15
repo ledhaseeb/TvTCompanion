@@ -373,7 +373,10 @@ export default function PlaylistPreviewScreen() {
     const calmingIds = new Set(calmingVideos.map((v) => v.id));
     const playlistIds = new Set(playlist.map((v) => v.id));
     const filtered = candidates.filter(
-      (c) => !calmingIds.has(c.id) && !playlistIds.has(c.id),
+      (c) =>
+        !calmingIds.has(c.id) &&
+        !playlistIds.has(c.id) &&
+        c.stimulationLevel >= 1,
     );
     if (filtered.length === 0) {
       Alert.alert("No Alternatives", "No replacement videos available.");
