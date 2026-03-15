@@ -475,7 +475,9 @@ export default function PlaylistPreviewScreen() {
         );
         return;
       }
+      console.error("Start session error:", err);
       Alert.alert("Error", err instanceof Error ? err.message : "Failed to start session");
+    } finally {
       setIsStarting(false);
     }
   };
