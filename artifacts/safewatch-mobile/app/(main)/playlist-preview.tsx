@@ -279,6 +279,7 @@ export default function PlaylistPreviewScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isShuffling, setIsShuffling] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [includeWindDown, setIncludeWindDown] = useState(
     params.includeWindDown === "1",
@@ -442,19 +443,20 @@ export default function PlaylistPreviewScreen() {
   const handleStart = async () => {
     if (playlist.length === 0) return;
     setIsStarting(true);
+    setStartError(null);
     try {
       await doStartSession(false);
       setIsStarting(false);
     } catch (err: unknown) {
-      console.log("[handleStart] caught error:", err);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.log("[handleStart] caught error:", errMsg);
       const isConflict = err instanceof SessionConflictError ||
         (err instanceof Error && err.name === "SessionConflictError");
       if (isConflict) {
-        const conflictMsg = err instanceof Error ? err.message : "Active session conflict";
         setIsStarting(false);
         Alert.alert(
           "Session Conflict",
-          `${conflictMsg}\n\nStarting this session will close the existing one. Continue?`,
+          `${errMsg}\n\nStarting this session will close the existing one. Continue?`,
           [
             { text: "Cancel", style: "cancel" },
             {
@@ -462,13 +464,13 @@ export default function PlaylistPreviewScreen() {
               style: "destructive",
               onPress: async () => {
                 setIsStarting(true);
+                setStartError(null);
                 try {
                   await doStartSession(true);
                 } catch (retryErr: unknown) {
-                  Alert.alert(
-                    "Error",
-                    retryErr instanceof Error ? retryErr.message : "Failed to start session",
-                  );
+                  const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
+                  setStartError(retryMsg);
+                  Alert.alert("Error", retryMsg);
                 } finally {
                   setIsStarting(false);
                 }
@@ -478,8 +480,8 @@ export default function PlaylistPreviewScreen() {
         );
         return;
       }
-      console.error("[handleStart] Start session error:", err);
-      Alert.alert("Error", err instanceof Error ? err.message : "Failed to start session");
+      setStartError(errMsg);
+      Alert.alert("Error", errMsg);
       setIsStarting(false);
     }
   };
@@ -681,6 +683,11 @@ export default function PlaylistPreviewScreen() {
       <View
         style={[styles.footer, { paddingBottom: insets.bottom + spacing.sm }]}
       >
+        {startError && (
+          <Text style={{ color: "#ef4444", fontSize: 12, fontFamily: "Inter_500Medium", textAlign: "center", marginBottom: 8 }}>
+            {startError}
+          </Text>
+        )}
         <TouchableOpacity
           style={[
             styles.startButton,
