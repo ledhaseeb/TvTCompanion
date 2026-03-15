@@ -7,7 +7,6 @@ import {
   Alert,
   StatusBar,
   Dimensions,
-  Animated,
   ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
@@ -36,12 +35,9 @@ export default function PlayerScreen() {
 
   const [playing, setPlaying] = useState(true);
   const [elapsed, setElapsed] = useState(0);
-  const [showControls, setShowControls] = useState(true);
   const [ready, setReady] = useState(false);
-  const controlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const watchStartRef = useRef(Date.now());
   const totalWatchedRef = useRef(0);
-  const controlsOpacity = useRef(new Animated.Value(1)).current;
 
   const { width: screenWidth } = Dimensions.get("window");
   const playerHeight = Math.round((screenWidth * 9) / 16);
@@ -79,37 +75,10 @@ export default function PlayerScreen() {
   }, [session.finishMode, sessionTotalSeconds]);
 
   useEffect(() => {
-    if (showControls) {
-      Animated.timing(controlsOpacity, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: true,
-      }).start();
-      clearControlsTimer();
-      controlsTimer.current = setTimeout(() => {
-        Animated.timing(controlsOpacity, {
-          toValue: 0,
-          duration: 400,
-          useNativeDriver: true,
-        }).start(() => setShowControls(false));
-      }, 5000);
-    }
-    return () => clearControlsTimer();
-  }, [showControls]);
-
-  useEffect(() => {
     if (currentVideo && isCasting) {
       loadMedia(currentVideo.youtubeId, currentVideo.title);
     }
   }, [currentVideo?.youtubeId, isCasting]);
-
-  const clearControlsTimer = () => {
-    if (controlsTimer.current) clearTimeout(controlsTimer.current);
-  };
-
-  const toggleControls = () => {
-    setShowControls((prev) => !prev);
-  };
 
   const handleStateChange = useCallback(
     (state: string) => {
@@ -215,11 +184,7 @@ export default function PlayerScreen() {
   return (
     <View style={styles.container}>
       <StatusBar hidden />
-      <TouchableOpacity
-        activeOpacity={1}
-        onPress={toggleControls}
-        style={styles.playerArea}
-      >
+      <View style={styles.playerArea}>
         {!isCasting && (
           <YoutubePlayer
             key={currentVideo.youtubeId}
@@ -233,6 +198,7 @@ export default function PlayerScreen() {
               modestbranding: true,
               rel: false,
               preventFullScreen: false,
+              controls: true,
             }}
             webViewProps={{
               allowsInlineMediaPlayback: true,
@@ -248,74 +214,63 @@ export default function PlayerScreen() {
             <Text style={styles.castingTitle}>{currentVideo.title}</Text>
           </View>
         )}
+      </View>
 
-        {showControls && (
-          <Animated.View
-            style={[styles.controlsOverlay, { opacity: controlsOpacity }]}
+      <View style={styles.controlBar}>
+        <TouchableOpacity
+          onPress={handleEndPress}
+          style={styles.controlBtn}
+          testID="button-end"
+        >
+          <Feather name="x" size={20} color={colors.white} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => setPlaying(!playing)}
+          style={styles.playPauseBtn}
+          testID="button-play-pause"
+        >
+          <Feather
+            name={playing ? "pause" : "play"}
+            size={24}
+            color={colors.white}
+          />
+        </TouchableOpacity>
+
+        <View style={styles.videoIndexBadge}>
+          <Text style={styles.videoIndexText}>
+            {session.currentIndex + 1}/{session.playlist.length}
+          </Text>
+        </View>
+
+        <View style={styles.timeInfo}>
+          <Text
+            style={[
+              styles.timeText,
+              isOvertime && styles.timeTextOvertime,
+            ]}
           >
-            <View style={styles.topControls}>
-              <TouchableOpacity
-                onPress={handleEndPress}
-                style={styles.controlBtn}
-                testID="button-end"
-              >
-                <Feather name="x" size={22} color={colors.white} />
-              </TouchableOpacity>
+            {isOvertime ? "+" : ""}
+            {formatTime(isOvertime ? elapsed - sessionTotalSeconds : remaining)}{" "}
+            {isOvertime ? "over" : "left"}
+          </Text>
+        </View>
 
-              <View style={styles.videoIndexBadge}>
-                <Text style={styles.videoIndexText}>
-                  {session.currentIndex + 1}/{session.playlist.length}
-                </Text>
-              </View>
+        <TouchableOpacity
+          onPress={handleSkip}
+          style={styles.skipBtn}
+          testID="button-skip"
+        >
+          <Feather name="skip-forward" size={20} color={colors.white} />
+        </TouchableOpacity>
 
-              {NativeCastButton && (
-                <NativeCastButton
-                  style={{ width: 40, height: 40 }}
-                  tintColor={colors.white}
-                />
-              )}
-            </View>
-
-            <View style={styles.centerControls}>
-              <TouchableOpacity
-                onPress={() => setPlaying(!playing)}
-                style={styles.playPauseBtn}
-                testID="button-play-pause"
-              >
-                <Feather
-                  name={playing ? "pause" : "play"}
-                  size={36}
-                  color={colors.white}
-                />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.bottomControls}>
-              <View style={styles.timeInfo}>
-                <Text
-                  style={[
-                    styles.timeText,
-                    isOvertime && styles.timeTextOvertime,
-                  ]}
-                >
-                  {isOvertime ? "+" : ""}
-                  {formatTime(isOvertime ? elapsed - sessionTotalSeconds : remaining)}{" "}
-                  {isOvertime ? "over" : "left"}
-                </Text>
-              </View>
-
-              <TouchableOpacity
-                onPress={handleSkip}
-                style={styles.skipBtn}
-                testID="button-skip"
-              >
-                <Feather name="skip-forward" size={20} color={colors.white} />
-                <Text style={styles.skipText}>Skip</Text>
-              </TouchableOpacity>
-            </View>
-          </Animated.View>
+        {NativeCastButton && (
+          <NativeCastButton
+            style={{ width: 32, height: 32 }}
+            tintColor={colors.white}
+          />
         )}
-      </TouchableOpacity>
+      </View>
 
       <View style={styles.progressBar}>
         <View
@@ -369,7 +324,7 @@ const styles = StyleSheet.create({
     marginTop: 100,
   },
   playerArea: {
-    flex: 1,
+    backgroundColor: colors.black,
     justifyContent: "center",
   },
   castingPlaceholder: {
@@ -389,84 +344,61 @@ const styles = StyleSheet.create({
     textAlign: "center",
     paddingHorizontal: spacing.xl,
   },
-  controlsOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.4)",
-    justifyContent: "space-between",
-    zIndex: 10,
-  },
-  topControls: {
+  controlBar: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    paddingTop: 48,
-    paddingHorizontal: spacing.lg,
+    justifyContent: "space-between",
+    backgroundColor: "#1a1a2e",
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    gap: spacing.sm,
   },
   controlBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(255,255,255,0.2)",
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.15)",
     justifyContent: "center",
     alignItems: "center",
   },
   videoIndexBadge: {
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: "rgba(255,255,255,0.1)",
     borderRadius: borderRadius.full,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 4,
   },
   videoIndexText: {
     color: colors.white,
-    fontSize: 14,
+    fontSize: 12,
     fontFamily: "Inter_600SemiBold",
   },
-  centerControls: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
   playPauseBtn: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: "rgba(255,255,255,0.2)",
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.15)",
     justifyContent: "center",
     alignItems: "center",
-  },
-  bottomControls: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingBottom: 16,
-    paddingHorizontal: spacing.lg,
   },
   timeInfo: {
-    backgroundColor: "rgba(0,0,0,0.5)",
-    borderRadius: borderRadius.full,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
+    flex: 1,
   },
   timeText: {
     color: colors.white,
-    fontSize: 15,
+    fontSize: 13,
     fontFamily: "Inter_600SemiBold",
+    textAlign: "center",
   },
   timeTextOvertime: {
     color: colors.warning,
   },
   skipBtn: {
-    flexDirection: "row",
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    justifyContent: "center",
     alignItems: "center",
-    gap: 6,
-    backgroundColor: "rgba(255,255,255,0.2)",
-    borderRadius: borderRadius.full,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  skipText: {
-    color: colors.white,
-    fontSize: 14,
-    fontFamily: "Inter_500Medium",
   },
   progressBar: {
     height: 3,
