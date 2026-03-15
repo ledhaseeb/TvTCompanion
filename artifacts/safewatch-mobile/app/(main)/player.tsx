@@ -44,6 +44,7 @@ export default function PlayerScreen() {
   const [ready, setReady] = useState(false);
   const watchStartRef = useRef(Date.now());
   const totalWatchedRef = useRef(0);
+  const justAdvancedRef = useRef(false);
 
   const { width: screenWidth } = Dimensions.get("window");
   const playerHeight = Math.round((screenWidth * 9) / 16);
@@ -103,14 +104,21 @@ export default function PlayerScreen() {
   const handleStateChange = useCallback(
     (state: string) => {
       if (state === "ended") {
+        justAdvancedRef.current = true;
         recordWatchHistory();
         advanceVideo();
       } else if (state === "paused") {
+        if (justAdvancedRef.current) {
+          return;
+        }
         totalWatchedRef.current += Math.floor((Date.now() - watchStartRef.current) / 1000);
         setPlaying(false);
       } else if (state === "playing") {
+        justAdvancedRef.current = false;
         watchStartRef.current = Date.now();
         setPlaying(true);
+      } else if (state === "buffering" || state === "video cued") {
+        justAdvancedRef.current = false;
       }
     },
     [currentVideo, session.sessionId],
