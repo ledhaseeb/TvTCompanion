@@ -22,6 +22,31 @@ import { TAPER_MODES } from "@/lib/types";
 
 type FeatherIconName = ComponentProps<typeof Feather>["name"];
 
+function normalizeVideo(v: Record<string, unknown>): Video {
+  return {
+    id: (v.id as string) || "",
+    youtubeId: (v.youtubeId || v.youtube_id || "") as string,
+    title: (v.title as string) || "",
+    channelId: (v.channelId || v.channel_id || null) as string | null,
+    youtubeChannelId: (v.youtubeChannelId || v.youtube_channel_id || null) as string | null,
+    youtubeChannelTitle: (v.youtubeChannelTitle || v.youtube_channel_title || null) as string | null,
+    seriesId: (v.seriesId || v.series_id || null) as string | null,
+    seriesName: (v.seriesName || v.series_name || null) as string | null,
+    durationSeconds: (v.durationSeconds || v.duration_seconds || 0) as number,
+    stimulationLevel: (v.stimulationLevel ?? v.stimulation_level ?? 0) as number,
+    ageMin: (v.ageMin ?? v.age_min ?? null) as number | null,
+    ageMax: (v.ageMax ?? v.age_max ?? null) as number | null,
+    thumbnailUrl: (v.thumbnailUrl || v.thumbnail_url || null) as string | null,
+    customThumbnailUrl: (v.customThumbnailUrl || v.custom_thumbnail_url || null) as string | null,
+    isPublished: (v.isPublished ?? v.is_published ?? 1) as number,
+    isEmbeddable: (v.isEmbeddable ?? v.is_embeddable ?? 1) as number,
+  };
+}
+
+function normalizeVideos(arr: Record<string, unknown>[]): Video[] {
+  return (arr || []).map(normalizeVideo);
+}
+
 const DARK = {
   bg: "#0f1923",
   card: "#1a2a3a",
@@ -294,10 +319,15 @@ export default function PlaylistPreviewScreen() {
         taperMode,
         flatlineLevel,
       });
-      const data: PlaylistResponse = await res.json();
-      setPlaylist(data.playlist);
-      setCalmingVideos(data.calmingVideos || []);
-      setReplacementCandidates(data.replacementCandidates || {});
+      const data = await res.json();
+      setPlaylist(normalizeVideos(data.playlist));
+      setCalmingVideos(normalizeVideos(data.calmingVideos || data.calming_videos || []));
+      const rawCandidates = data.replacementCandidates || data.replacement_candidates || {};
+      const normCandidates: Record<number, Video[]> = {};
+      for (const [k, v] of Object.entries(rawCandidates)) {
+        normCandidates[Number(k)] = normalizeVideos(v as Record<string, unknown>[]);
+      }
+      setReplacementCandidates(normCandidates);
       setError(null);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to load playlist");
@@ -352,13 +382,19 @@ export default function PlaylistPreviewScreen() {
         taperMode,
         flatlineLevel,
       });
-      const data: PlaylistResponse = await res.json();
-      setPlaylist(data.playlist);
-      if (data.calmingVideos?.length > 0) {
-        setCalmingVideos(data.calmingVideos);
+      const data = await res.json();
+      setPlaylist(normalizeVideos(data.playlist));
+      const calm = data.calmingVideos || data.calming_videos;
+      if (calm?.length > 0) {
+        setCalmingVideos(normalizeVideos(calm));
       }
-      if (data.replacementCandidates) {
-        setReplacementCandidates(data.replacementCandidates);
+      const rc = data.replacementCandidates || data.replacement_candidates;
+      if (rc) {
+        const normCandidates: Record<number, Video[]> = {};
+        for (const [k, v] of Object.entries(rc)) {
+          normCandidates[Number(k)] = normalizeVideos(v as Record<string, unknown>[]);
+        }
+        setReplacementCandidates(normCandidates);
       }
     } catch {
       Alert.alert("Error", "Failed to shuffle playlist");
@@ -379,16 +415,20 @@ export default function PlaylistPreviewScreen() {
       if (res.ok) {
         const data = await res.json();
         if (data.playlist && Array.isArray(data.playlist)) {
-          const replacedVideo = data.playlist[index];
+          const normalized = normalizeVideos(data.playlist);
+          const replacedVideo = normalized[index];
           if (replacedVideo && replacedVideo.id !== currentVideo.id) {
-            setPlaylist(data.playlist);
+            setPlaylist(normalized);
             return;
           }
-        } else if (data.video && data.video.id !== currentVideo.id) {
-          const newPlaylist = [...playlist];
-          newPlaylist[index] = data.video;
-          setPlaylist(newPlaylist);
-          return;
+        } else if (data.video) {
+          const normalized = normalizeVideo(data.video as Record<string, unknown>);
+          if (normalized.id !== currentVideo.id) {
+            const newPlaylist = [...playlist];
+            newPlaylist[index] = normalized;
+            setPlaylist(newPlaylist);
+            return;
+          }
         }
       }
       if (res.status === 404) {
