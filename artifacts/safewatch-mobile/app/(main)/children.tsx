@@ -54,11 +54,12 @@ export default function StartSessionScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectedIds, setSelectedIds] = useState<Set<string> | null>(null);
   const [youngChildProtection, setYoungChildProtection] = useState(false);
-  const [sessionMinutes, setSessionMinutes] = useState(30);
+  const [sessionMinutes, setSessionMinutes] = useState<number | null>(null);
   const [taperMode, setTaperMode] = useState<TaperMode>("taper_down");
   const [flatlineLevel, setFlatlineLevel] = useState(3);
+  const [hasInitialized, setHasInitialized] = useState(false);
 
   const {
     data: children = [],
@@ -69,9 +70,23 @@ export default function StartSessionScreen() {
     enabled: !!user,
   });
 
+  if (!hasInitialized && children.length > 0) {
+    setHasInitialized(true);
+    setSelectedIds(new Set(children.map((c) => c.id)));
+    const avgMinutes = Math.round(
+      children.reduce((sum, c) => sum + (c.entertainmentMinutes || 60), 0) /
+        children.length,
+    );
+    const snapped = Math.round(avgMinutes / 5) * 5;
+    setSessionMinutes(Math.max(10, Math.min(120, snapped)));
+  }
+
+  const resolvedSelectedIds = selectedIds ?? new Set<string>();
+  const resolvedSessionMinutes = sessionMinutes ?? 30;
+
   const selectedChildren = useMemo(
-    () => children.filter((c) => selectedIds.has(c.id)),
-    [children, selectedIds],
+    () => children.filter((c) => resolvedSelectedIds.has(c.id)),
+    [children, resolvedSelectedIds],
   );
 
   const youngestChild = useMemo(() => {
@@ -89,7 +104,7 @@ export default function StartSessionScreen() {
 
   const toggleChild = (id: string) => {
     setSelectedIds((prev) => {
-      const next = new Set(prev);
+      const next = new Set(prev ?? []);
       if (next.has(id)) {
         next.delete(id);
       } else {
@@ -100,7 +115,7 @@ export default function StartSessionScreen() {
   };
 
   const handlePreviewSession = () => {
-    if (selectedIds.size === 0) {
+    if (resolvedSelectedIds.size === 0) {
       Alert.alert(
         "Select Children",
         "Please select at least one child to start a session.",
@@ -111,9 +126,9 @@ export default function StartSessionScreen() {
     router.push({
       pathname: "/(main)/playlist-preview",
       params: {
-        childIds: Array.from(selectedIds).join(","),
+        childIds: Array.from(resolvedSelectedIds).join(","),
         childNames: selectedNames.join(","),
-        sessionMinutes: String(sessionMinutes),
+        sessionMinutes: String(resolvedSessionMinutes),
         taperMode,
         flatlineLevel: String(flatlineLevel),
         includeWindDown: "1",
@@ -189,7 +204,7 @@ export default function StartSessionScreen() {
           <>
             <View style={styles.avatarRow}>
               {children.map((child, index) => {
-                const isSelected = selectedIds.has(child.id);
+                const isSelected = resolvedSelectedIds.has(child.id);
                 return (
                   <TouchableOpacity
                     key={child.id}
@@ -263,15 +278,15 @@ export default function StartSessionScreen() {
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>Session Length</Text>
-                <Text style={styles.minutesValue}>{sessionMinutes} min</Text>
+                <Text style={styles.minutesValue}>{resolvedSessionMinutes} min</Text>
               </View>
               <Slider
                 style={styles.slider}
                 minimumValue={10}
                 maximumValue={120}
                 step={5}
-                value={sessionMinutes}
-                onValueChange={setSessionMinutes}
+                value={resolvedSessionMinutes}
+                onValueChange={(v) => setSessionMinutes(v)}
                 minimumTrackTintColor={DARK.accent}
                 maximumTrackTintColor={DARK.border}
                 thumbTintColor={DARK.text}
@@ -323,24 +338,41 @@ export default function StartSessionScreen() {
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Energy Level</Text>
                 <View style={styles.stimRow}>
-                  {[1, 2, 3, 4, 5].map((level) => (
-                    <TouchableOpacity
-                      key={level}
-                      onPress={() => setFlatlineLevel(level)}
-                      style={[
-                        styles.stimButton,
-                        {
-                          backgroundColor:
-                            flatlineLevel >= level
+                  {[1, 2, 3, 4, 5].map((level) => {
+                    const ENERGY_LABELS: Record<number, string> = {
+                      1: "Slow",
+                      2: "Calm",
+                      3: "Medium",
+                      4: "Active",
+                      5: "Energetic",
+                    };
+                    const isActive = flatlineLevel === level;
+                    return (
+                      <TouchableOpacity
+                        key={level}
+                        onPress={() => setFlatlineLevel(level)}
+                        style={[
+                          styles.stimButton,
+                          {
+                            backgroundColor: isActive
                               ? colors.stimulation[flatlineLevel] ||
                                 DARK.textMuted
                               : DARK.border,
-                        },
-                      ]}
-                    >
-                      <Text style={styles.stimButtonText}>{level}</Text>
-                    </TouchableOpacity>
-                  ))}
+                          },
+                        ]}
+                      >
+                        <Text style={styles.stimButtonText}>{level}</Text>
+                        <Text
+                          style={[
+                            styles.stimButtonLabel,
+                            isActive && styles.stimButtonLabelActive,
+                          ]}
+                        >
+                          {ENERGY_LABELS[level]}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
               </View>
             )}
@@ -355,17 +387,17 @@ export default function StartSessionScreen() {
           <TouchableOpacity
             style={[
               styles.previewButton,
-              selectedIds.size === 0 && styles.previewButtonDisabled,
+              resolvedSelectedIds.size === 0 && styles.previewButtonDisabled,
             ]}
             onPress={handlePreviewSession}
-            disabled={selectedIds.size === 0}
+            disabled={resolvedSelectedIds.size === 0}
             activeOpacity={0.8}
             testID="button-preview-session"
           >
             <Feather name="play" size={18} color={DARK.bg} />
             <Text style={styles.previewButtonText}>
               Preview Session
-              {selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
+              {resolvedSelectedIds.size > 0 ? ` (${resolvedSelectedIds.size})` : ""}
             </Text>
           </TouchableOpacity>
 
@@ -632,15 +664,24 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   stimButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     justifyContent: "center",
     alignItems: "center",
   },
   stimButtonText: {
     fontSize: 16,
     fontFamily: "Inter_700Bold",
+    color: "#fff",
+  },
+  stimButtonLabel: {
+    fontSize: 9,
+    fontFamily: "Inter_500Medium",
+    color: DARK.textMuted,
+    marginTop: 2,
+  },
+  stimButtonLabelActive: {
     color: "#fff",
   },
   footer: {

@@ -35,11 +35,12 @@ const DARK = {
 };
 
 const STIM_LABELS: Record<number, string> = {
-  1: "Calm",
-  2: "Slow",
+  0: "Silent",
+  1: "Slow",
+  2: "Calm",
   3: "Medium",
-  4: "Fast",
-  5: "Intense",
+  4: "Active",
+  5: "Energetic",
 };
 
 function formatDuration(seconds: number): string {
