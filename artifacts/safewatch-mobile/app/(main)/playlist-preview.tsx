@@ -297,8 +297,8 @@ export default function PlaylistPreviewScreen() {
       setCalmingVideos(data.calmingVideos || []);
       setReplacementCandidates(data.replacementCandidates || {});
       setError(null);
-    } catch (err: any) {
-      setError(err.message || "Failed to load playlist");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to load playlist");
     } finally {
       setIsLoading(false);
     }
@@ -399,8 +399,8 @@ export default function PlaylistPreviewScreen() {
         finishMode,
       });
       router.push("/(main)/player");
-    } catch (err: any) {
-      Alert.alert("Error", err.message || "Failed to start session");
+    } catch (err: unknown) {
+      Alert.alert("Error", err instanceof Error ? err.message : "Failed to start session");
     } finally {
       setIsStarting(false);
     }
