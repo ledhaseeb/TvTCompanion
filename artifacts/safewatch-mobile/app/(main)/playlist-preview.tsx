@@ -559,16 +559,14 @@ export default function PlaylistPreviewScreen() {
           </View>
         </View>
 
-        {hasOverflow && (
-          <Text style={styles.warningText}>
-            WARNING: Session length may exceed your setting.{" "}
-            <Text style={{ fontFamily: "Inter_600SemiBold" }}>⇄ Shuffle</Text>,{" "}
-            <Text style={{ fontFamily: "Inter_600SemiBold" }}>↻ Replace</Text>{" "}
-            or{" "}
-            <Text style={{ fontFamily: "Inter_600SemiBold" }}>✕ Remove</Text>{" "}
-            videos if necessary to fit your requirement.
-          </Text>
-        )}
+        <Text style={[styles.warningText, !hasOverflow && styles.warningTextMuted]}>
+          WARNING: Session length may exceed.{" "}
+          <Text style={{ fontFamily: "Inter_600SemiBold" }}>⇄ Shuffle</Text>,{" "}
+          <Text style={{ fontFamily: "Inter_600SemiBold" }}>↻ Replace</Text>{" "}
+          or{" "}
+          <Text style={{ fontFamily: "Inter_600SemiBold" }}>✕ Remove</Text>{" "}
+          videos to fit your requirement.
+        </Text>
 
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
@@ -778,7 +776,8 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
   },
   headerLeft: {
     flexDirection: "row",
@@ -851,6 +850,9 @@ const styles = StyleSheet.create({
     color: DARK.textSecondary,
     lineHeight: 18,
     marginBottom: spacing.md,
+  },
+  warningTextMuted: {
+    opacity: 0.35,
   },
   statsRow: {
     flexDirection: "row",
