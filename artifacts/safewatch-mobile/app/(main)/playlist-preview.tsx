@@ -280,7 +280,6 @@ export default function PlaylistPreviewScreen() {
   const [isShuffling, setIsShuffling] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
-  const [debugLog, setDebugLog] = useState<string[]>([]);
   const [forceNext, setForceNext] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [includeWindDown, setIncludeWindDown] = useState(
@@ -369,6 +368,7 @@ export default function PlaylistPreviewScreen() {
   };
 
   const handleReplace = async (index: number) => {
+    const currentVideo = playlist[index];
     try {
       const res = await apiRequestRaw("POST", "/api/sessions/playlist/replace", {
         childIds,
@@ -378,14 +378,18 @@ export default function PlaylistPreviewScreen() {
       });
       if (res.ok) {
         const data = await res.json();
-        if (data.playlist) {
-          setPlaylist(data.playlist);
-        } else if (data.video) {
+        if (data.playlist && Array.isArray(data.playlist)) {
+          const replacedVideo = data.playlist[index];
+          if (replacedVideo && replacedVideo.id !== currentVideo.id) {
+            setPlaylist(data.playlist);
+            return;
+          }
+        } else if (data.video && data.video.id !== currentVideo.id) {
           const newPlaylist = [...playlist];
           newPlaylist[index] = data.video;
           setPlaylist(newPlaylist);
+          return;
         }
-        return;
       }
       if (res.status === 404) {
         Alert.alert("No Alternatives", "No replacement videos available for this position.");
@@ -405,6 +409,7 @@ export default function PlaylistPreviewScreen() {
       (c) =>
         !calmingIds.has(c.id) &&
         !playlistIds.has(c.id) &&
+        c.id !== currentVideo.id &&
         c.stimulationLevel >= 1,
     );
     if (filtered.length === 0) {
@@ -426,58 +431,39 @@ export default function PlaylistPreviewScreen() {
     setPlaylist((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const addLog = (msg: string) => {
-    const ts = new Date().toLocaleTimeString();
-    setDebugLog((prev) => [...prev.slice(-9), `${ts} ${msg}`]);
-    console.log("[PlaylistPreview]", msg);
-  };
-
   const doStartSession = async (force: boolean) => {
-    addLog(`startSession(force=${force})...`);
-    try {
-      const sid = await startSession({
-        childIds,
-        childNames,
-        playlist,
-        calmingVideos: includeWindDown ? calmingVideos : [],
-        includeWindDown,
-        taperMode,
-        flatlineLevel,
-        sessionMinutes,
-        finishMode,
-        force,
-      });
-      addLog(`session created: ${sid}`);
-      addLog("navigating to player...");
-      router.push("/(main)/player");
-      addLog("router.push called");
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      addLog(`ERROR in doStartSession: ${msg}`);
-      throw e;
-    }
+    await startSession({
+      childIds,
+      childNames,
+      playlist,
+      calmingVideos: includeWindDown ? calmingVideos : [],
+      includeWindDown,
+      taperMode,
+      flatlineLevel,
+      sessionMinutes,
+      finishMode,
+      force,
+    });
+    router.push("/(main)/player");
   };
 
   const handleStart = async () => {
     const useForce = forceNext;
-    addLog(`handleStart pressed, playlist=${playlist.length}, force=${useForce}`);
     if (playlist.length === 0) return;
     setIsStarting(true);
     setStartError(null);
     setForceNext(false);
     try {
       await doStartSession(useForce);
-      addLog("success, resetting button");
       setIsStarting(false);
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
       const isConflict = err instanceof SessionConflictError ||
         (err instanceof Error && err.name === "SessionConflictError") ||
         errMsg.includes("active session");
-      addLog(`caught (conflict=${isConflict}): ${errMsg}`);
       if (isConflict) {
         setIsStarting(false);
-        setStartError(`Conflict: ${errMsg} — Tap "Start Watching" to force-start.`);
+        setStartError(`${errMsg} — Tap "Start Watching" again to override.`);
         setForceNext(true);
         return;
       }
@@ -683,13 +669,6 @@ export default function PlaylistPreviewScreen() {
       <View
         style={[styles.footer, { paddingBottom: insets.bottom + spacing.sm }]}
       >
-        {debugLog.length > 0 && (
-          <View style={{ backgroundColor: "#1e1e2e", borderRadius: 8, padding: 8, marginBottom: 8, maxHeight: 120 }}>
-            {debugLog.map((line, i) => (
-              <Text key={i} style={{ color: "#94a3b8", fontSize: 10, fontFamily: "Inter_400Regular" }}>{line}</Text>
-            ))}
-          </View>
-        )}
         {startError && (
           <Text style={{ color: "#ef4444", fontSize: 12, fontFamily: "Inter_500Medium", textAlign: "center", marginBottom: 8 }}>
             {startError}
