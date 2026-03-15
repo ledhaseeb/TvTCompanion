@@ -64,8 +64,9 @@ export default function PlayerScreen() {
         ...rawVideo,
         youtubeId:
           rawVideo.youtubeId ||
-          (rawVideo as any).youtube_id ||
+          (rawVideo as any).youtubeVideoId ||
           (rawVideo as any).youtube_video_id ||
+          (rawVideo as any).youtube_id ||
           extractYoutubeIdFromThumbnail(rawVideo.thumbnailUrl) ||
           "",
       }
