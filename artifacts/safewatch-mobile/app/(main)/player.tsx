@@ -75,6 +75,7 @@ export default function PlayerScreen() {
   const sessionTotalSeconds = session.sessionMinutes * 60;
 
   useEffect(() => {
+    if (!playing) return;
     const interval = setInterval(() => {
       const now = Date.now();
       const totalSeconds =
@@ -91,7 +92,7 @@ export default function PlayerScreen() {
       }
     }, 1000);
     return () => clearInterval(interval);
-  }, [session.finishMode, sessionTotalSeconds]);
+  }, [playing, session.finishMode, sessionTotalSeconds]);
 
   useEffect(() => {
     if (currentVideo && isCasting) {
@@ -105,8 +106,10 @@ export default function PlayerScreen() {
         recordWatchHistory();
         advanceVideo();
       } else if (state === "paused") {
+        totalWatchedRef.current += Math.floor((Date.now() - watchStartRef.current) / 1000);
         setPlaying(false);
       } else if (state === "playing") {
+        watchStartRef.current = Date.now();
         setPlaying(true);
       }
     },
@@ -184,13 +187,13 @@ export default function PlayerScreen() {
   if (!ready || !currentVideo || !session.isActive) {
     if (!ready) {
       return (
-        <View style={styles.container}>
+        <View style={[styles.container, { alignItems: "center" }]}>
           <ActivityIndicator size="large" color="#a78bfa" />
         </View>
       );
     }
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { alignItems: "center" }]}>
         <Text style={styles.endText}>Session Complete</Text>
       </View>
     );
@@ -203,6 +206,7 @@ export default function PlayerScreen() {
   return (
     <View style={styles.container}>
       <StatusBar hidden />
+      <View style={styles.centeredContent}>
       <View style={styles.playerArea}>
         {!isCasting && (
           <YoutubePlayer
@@ -246,18 +250,6 @@ export default function PlayerScreen() {
           testID="button-end"
         >
           <Feather name="x" size={20} color={colors.white} />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => setPlaying(!playing)}
-          style={styles.playPauseBtn}
-          testID="button-play-pause"
-        >
-          <Feather
-            name={playing ? "pause" : "play"}
-            size={24}
-            color={colors.white}
-          />
         </TouchableOpacity>
 
         <View style={styles.videoIndexBadge}>
@@ -330,6 +322,7 @@ export default function PlayerScreen() {
           ))}
         </View>
       </View>
+      </View>
     </View>
   );
 }
@@ -338,7 +331,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.black,
+    justifyContent: "center",
   },
+  centeredContent: {},
   endText: {
     color: colors.white,
     fontSize: 18,
@@ -394,14 +389,6 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: 12,
     fontFamily: "Inter_600SemiBold",
-  },
-  playPauseBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "rgba(255,255,255,0.15)",
-    justifyContent: "center",
-    alignItems: "center",
   },
   timeInfo: {
     flex: 1,
