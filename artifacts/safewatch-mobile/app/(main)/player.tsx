@@ -15,7 +15,7 @@ import { Feather } from "@expo/vector-icons";
 import YoutubePlayer from "react-native-youtube-iframe";
 import { useSession } from "@/contexts/SessionContext";
 import { useCast } from "@/contexts/CastContext";
-import type { ReceiverMessage } from "@/contexts/CastContext";
+import type { ReceiverMessage, CastStatusMessage } from "@/contexts/CastContext";
 import { apiRequest } from "@/lib/query-client";
 import { colors, spacing, borderRadius } from "@/constants/colors";
 
@@ -30,6 +30,8 @@ function formatTime(seconds: number): string {
   const s = Math.floor(seconds % 60);
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
+
+const FEEDBACK_PATH = "/(main)/session-feedback";
 
 export default function PlayerScreen() {
   const router = useRouter();
@@ -62,6 +64,7 @@ export default function PlayerScreen() {
   const totalWatchedRef = useRef(0);
   const justAdvancedRef = useRef(false);
   const castPlaylistSentRef = useRef(false);
+  const castElapsedRef = useRef(0);
 
   const { width: screenWidth } = Dimensions.get("window");
   const playerHeight = Math.round((screenWidth * 9) / 16);
@@ -82,9 +85,6 @@ export default function PlayerScreen() {
         ...rawVideo,
         youtubeId:
           rawVideo.youtubeId ||
-          (rawVideo as any).youtubeVideoId ||
-          (rawVideo as any).youtube_video_id ||
-          (rawVideo as any).youtube_id ||
           extractYoutubeIdFromThumbnail(rawVideo.thumbnailUrl) ||
           "",
       }
@@ -93,6 +93,7 @@ export default function PlayerScreen() {
   const sessionTotalSeconds = session.sessionMinutes * 60;
 
   useEffect(() => {
+    if (isCasting) return;
     if (!playing) return;
     const interval = setInterval(() => {
       const now = Date.now();
@@ -110,7 +111,7 @@ export default function PlayerScreen() {
       }
     }, 1000);
     return () => clearInterval(interval);
-  }, [playing, session.finishMode, sessionTotalSeconds]);
+  }, [playing, session.finishMode, sessionTotalSeconds, isCasting]);
 
   useEffect(() => {
     if (isCasting && session.isActive && session.playlist.length > 0 && !castPlaylistSentRef.current) {
@@ -130,19 +131,27 @@ export default function PlayerScreen() {
 
     const unsubscribe = onReceiverMessage((msg: ReceiverMessage) => {
       switch (msg.type) {
-        case "STATUS":
-          if ("isPlaying" in msg) {
-            setPlaying(msg.isPlaying);
+        case "STATUS": {
+          const status = msg as CastStatusMessage;
+          setPlaying(status.isPlaying);
+          if (status.currentIndex !== session.currentIndex) {
+            setCurrentIndex(status.currentIndex);
           }
-          if ("currentIndex" in msg && msg.currentIndex !== session.currentIndex) {
-            setCurrentIndex(msg.currentIndex);
+          castElapsedRef.current = status.elapsedSeconds;
+          setElapsed(status.elapsedSeconds);
+          updateWatchTime(status.elapsedSeconds);
+
+          if (
+            session.finishMode === "hard" &&
+            status.elapsedSeconds >= sessionTotalSeconds
+          ) {
+            handleSessionEnd();
           }
           break;
+        }
 
         case "VIDEO_ENDED":
-          if ("index" in msg) {
-            recordWatchHistory();
-          }
+          recordWatchHistory();
           break;
 
         case "VIDEO_ERROR":
@@ -159,7 +168,7 @@ export default function PlayerScreen() {
     });
 
     return unsubscribe;
-  }, [isCasting, session.currentIndex]);
+  }, [isCasting, session.currentIndex, session.finishMode, sessionTotalSeconds]);
 
   const handleStateChange = useCallback(
     (state: string) => {
@@ -220,8 +229,9 @@ export default function PlayerScreen() {
       try { await stopMedia(); } catch {}
     }
     await endSession();
+    // @ts-expect-error -- expo-router typed routes don't cover dynamic params
     router.replace({
-      pathname: "/(main)/session-feedback" as any,
+      pathname: FEEDBACK_PATH,
       params: {
         sessionId: session.sessionId || "",
         childIds: session.childIds.join(","),
@@ -258,8 +268,9 @@ export default function PlayerScreen() {
 
   useEffect(() => {
     if (!session.isActive && session.sessionId) {
+      // @ts-expect-error -- expo-router typed routes don't cover dynamic params
       router.replace({
-        pathname: "/(main)/session-feedback" as any,
+        pathname: FEEDBACK_PATH,
         params: {
           sessionId: session.sessionId,
           childIds: session.childIds.join(","),

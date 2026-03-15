@@ -86,17 +86,20 @@
   <script src="https://www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
   <script src="https://www.youtube.com/iframe_api"></script>
   <script>
-    const NAMESPACE = 'urn:x-cast:com.safewatch.cast';
+    var NAMESPACE = 'urn:x-cast:com.safewatch.cast';
 
-    let ytPlayer = null;
-    let playlist = [];
-    let currentIndex = 0;
-    let isPlaying = false;
-    let sessionActive = false;
-    let statusInterval = null;
+    var ytPlayer = null;
+    var playlist = [];
+    var currentIndex = 0;
+    var isPlaying = false;
+    var sessionActive = false;
+    var statusInterval = null;
+    var sessionStartTime = 0;
+    var accumulatedPlaySeconds = 0;
+    var lastPlayStartTime = 0;
 
-    const castContext = cast.framework.CastReceiverContext.getInstance();
-    const playerManager = castContext.getPlayerManager();
+    var castContext = cast.framework.CastReceiverContext.getInstance();
+    var playerManager = castContext.getPlayerManager();
 
     function showIdle() {
       document.getElementById('idle-screen').classList.remove('hidden');
@@ -115,15 +118,24 @@
       document.getElementById('loading-overlay').classList.add('hidden');
     }
 
+    function getElapsedPlaySeconds() {
+      var extra = 0;
+      if (isPlaying && lastPlayStartTime > 0) {
+        extra = Math.floor((Date.now() - lastPlayStartTime) / 1000);
+      }
+      return accumulatedPlaySeconds + extra;
+    }
+
     function sendStatus() {
       if (!sessionActive) return;
-      const message = {
+      var message = {
         type: 'STATUS',
         currentIndex: currentIndex,
         isPlaying: isPlaying,
         totalVideos: playlist.length,
         currentVideoTitle: playlist[currentIndex] ? playlist[currentIndex].title : '',
-        currentVideoId: playlist[currentIndex] ? (playlist[currentIndex].youtubeId || playlist[currentIndex].youtubeVideoId || '') : '',
+        currentVideoId: playlist[currentIndex] ? (playlist[currentIndex].youtubeId || '') : '',
+        elapsedSeconds: getElapsedPlaySeconds()
       };
       try {
         castContext.sendCustomMessage(NAMESPACE, undefined, message);
@@ -141,8 +153,8 @@
       }
 
       currentIndex = index;
-      const video = playlist[currentIndex];
-      const videoId = video.youtubeId || video.youtubeVideoId || '';
+      var video = playlist[currentIndex];
+      var videoId = video.youtubeId || '';
 
       if (!videoId) {
         console.error('No video ID for index', index);
@@ -174,25 +186,23 @@
     }
 
     function onYTPlayerStateChange(event) {
-      const YT_STATES = {
-        '-1': 'unstarted',
-        '0': 'ended',
-        '1': 'playing',
-        '2': 'paused',
-        '3': 'buffering',
-        '5': 'cued'
-      };
-      const stateName = YT_STATES[event.data] || event.data;
-      console.log('YT state:', stateName);
-
       if (event.data === YT.PlayerState.PLAYING) {
         isPlaying = true;
+        lastPlayStartTime = Date.now();
         hideLoading();
         sendStatus();
       } else if (event.data === YT.PlayerState.PAUSED) {
+        if (isPlaying && lastPlayStartTime > 0) {
+          accumulatedPlaySeconds += Math.floor((Date.now() - lastPlayStartTime) / 1000);
+          lastPlayStartTime = 0;
+        }
         isPlaying = false;
         sendStatus();
       } else if (event.data === YT.PlayerState.ENDED) {
+        if (isPlaying && lastPlayStartTime > 0) {
+          accumulatedPlaySeconds += Math.floor((Date.now() - lastPlayStartTime) / 1000);
+          lastPlayStartTime = 0;
+        }
         isPlaying = false;
         sendMessage({ type: 'VIDEO_ENDED', index: currentIndex });
         playVideo(currentIndex + 1);
@@ -207,7 +217,7 @@
         type: 'VIDEO_ERROR',
         index: currentIndex,
         error: event.data,
-        title: playlist[currentIndex] ? playlist[currentIndex].title : '',
+        title: playlist[currentIndex] ? playlist[currentIndex].title : ''
       });
       playVideo(currentIndex + 1);
     }
@@ -225,25 +235,28 @@
           iv_load_policy: 3,
           fs: 0,
           disablekb: 1,
-          playsinline: 0,
+          playsinline: 0
         },
         events: {
           onReady: onYTPlayerReady,
           onStateChange: onYTPlayerStateChange,
-          onError: onYTPlayerError,
-        },
+          onError: onYTPlayerError
+        }
       });
     };
 
     castContext.addCustomMessageListener(NAMESPACE, function(event) {
       console.log('Cast message received:', event.data);
-      const data = event.data;
+      var data = event.data;
 
       switch (data.type) {
         case 'LOAD_PLAYLIST':
           playlist = data.playlist || [];
           currentIndex = data.startIndex || 0;
           sessionActive = true;
+          sessionStartTime = Date.now();
+          accumulatedPlaySeconds = 0;
+          lastPlayStartTime = 0;
           hideIdle();
 
           if (statusInterval) clearInterval(statusInterval);
@@ -252,7 +265,7 @@
           if (ytPlayer && typeof ytPlayer.loadVideoById === 'function') {
             playVideo(currentIndex);
           } else {
-            const checkReady = setInterval(function() {
+            var checkReady = setInterval(function() {
               if (ytPlayer && typeof ytPlayer.loadVideoById === 'function') {
                 clearInterval(checkReady);
                 playVideo(currentIndex);
@@ -283,6 +296,8 @@
 
         case 'STOP':
           sessionActive = false;
+          accumulatedPlaySeconds = 0;
+          lastPlayStartTime = 0;
           if (statusInterval) {
             clearInterval(statusInterval);
             statusInterval = null;
@@ -299,7 +314,7 @@
       }
     });
 
-    const castOptions = new cast.framework.CastReceiverOptions();
+    var castOptions = new cast.framework.CastReceiverOptions();
     castOptions.disableIdleTimeout = true;
     castOptions.customNamespaces = {};
     castOptions.customNamespaces[NAMESPACE] = cast.framework.system.MessageType.JSON;
