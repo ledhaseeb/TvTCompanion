@@ -370,9 +370,18 @@ export default function PlaylistPreviewScreen() {
       Alert.alert("No Alternatives", "No replacement videos available.");
       return;
     }
+    const calmingIds = new Set(calmingVideos.map((v) => v.id));
+    const playlistIds = new Set(playlist.map((v) => v.id));
+    const filtered = candidates.filter(
+      (c) => !calmingIds.has(c.id) && !playlistIds.has(c.id),
+    );
+    if (filtered.length === 0) {
+      Alert.alert("No Alternatives", "No replacement videos available.");
+      return;
+    }
     const newPlaylist = [...playlist];
     const replacement =
-      candidates[Math.floor(Math.random() * candidates.length)];
+      filtered[Math.floor(Math.random() * filtered.length)];
     newPlaylist[index] = replacement;
     setPlaylist(newPlaylist);
   };

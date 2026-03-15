@@ -31,7 +31,15 @@ router.post("/sessions/playlist", authMiddleware, async (req: AuthRequest, res: 
     return;
   }
 
-  const shuffled = [...allVideos].sort(() => Math.random() - 0.5);
+  const calmingVideos = allVideos
+    .filter(v => v.stimulationLevel <= 1)
+    .sort(() => Math.random() - 0.5)
+    .slice(0, 3);
+
+  const calmingIds = new Set(calmingVideos.map(v => v.id));
+  const entertainmentVideos = allVideos.filter(v => !calmingIds.has(v.id));
+
+  const shuffled = [...entertainmentVideos].sort(() => Math.random() - 0.5);
 
   let playlist: typeof allVideos = [];
   let accumulatedSeconds = 0;
@@ -53,15 +61,11 @@ router.post("/sessions/playlist", authMiddleware, async (req: AuthRequest, res: 
     playlist = [...first, ...second];
   }
 
-  const calmingVideos = allVideos
-    .filter(v => v.stimulationLevel <= 2)
-    .sort(() => Math.random() - 0.5)
-    .slice(0, 3);
-
+  const playlistIds = new Set(playlist.map(v => v.id));
   const replacementCandidates: Record<number, typeof allVideos> = {};
   playlist.forEach((video, index) => {
-    const candidates = allVideos
-      .filter(v => v.id !== video.id && Math.abs(v.stimulationLevel - video.stimulationLevel) <= 1)
+    const candidates = entertainmentVideos
+      .filter(v => v.id !== video.id && !playlistIds.has(v.id) && Math.abs(v.stimulationLevel - video.stimulationLevel) <= 1)
       .sort(() => Math.random() - 0.5)
       .slice(0, 3);
     if (candidates.length > 0) {
