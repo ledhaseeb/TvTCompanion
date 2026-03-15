@@ -120,7 +120,17 @@ export default function PlayerScreen() {
     }
   }, [isCasting, session.isActive, session.playlist.length]);
 
+  const wasCastingRef = useRef(false);
+
   useEffect(() => {
+    if (!isCasting && wasCastingRef.current) {
+      totalWatchedRef.current = castElapsedRef.current;
+      watchStartRef.current = Date.now();
+      setElapsed(castElapsedRef.current);
+      setPlaying(true);
+    }
+    wasCastingRef.current = isCasting;
+
     if (!isCasting) {
       castPlaylistSentRef.current = false;
     }
