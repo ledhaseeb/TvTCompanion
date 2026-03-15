@@ -21,7 +21,6 @@ export default function MainLayout() {
       }}
     >
       <Stack.Screen name="children" />
-      <Stack.Screen name="session-config" />
       <Stack.Screen name="playlist-preview" />
       <Stack.Screen name="player" />
     </Stack>

@@ -4,18 +4,34 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  FlatList,
+  ScrollView,
   ActivityIndicator,
   Alert,
-  Platform,
+  Switch,
 } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Slider from "@react-native-community/slider";
 import { useAuth } from "@/contexts/AuthContext";
 import { colors, spacing, borderRadius } from "@/constants/colors";
-import type { Child } from "@/lib/types";
+import type { Child, TaperMode } from "@/lib/types";
+import { TAPER_MODES } from "@/lib/types";
+
+const DARK = {
+  bg: "#0f1923",
+  card: "#1a2a3a",
+  cardSelected: "#1a3a3a",
+  border: "#2a3a4a",
+  borderSelected: "#2dd4a8",
+  accent: "#2dd4a8",
+  text: "#f1f5f9",
+  textSecondary: "#94a3b8",
+  textMuted: "#64748b",
+  avatarBg: "#334155",
+  avatarSelected: "#1e3a3a",
+};
 
 function getAge(birthMonth: number, birthYear: number): number {
   const now = new Date();
@@ -33,11 +49,16 @@ function getInitials(name: string): string {
     .slice(0, 2);
 }
 
-export default function ChildrenScreen() {
+export default function StartSessionScreen() {
   const { user, isCaregiver, logout } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [youngChildProtection, setYoungChildProtection] = useState(false);
+  const [sessionMinutes, setSessionMinutes] = useState(30);
+  const [taperMode, setTaperMode] = useState<TaperMode>("taper_down");
+  const [flatlineLevel, setFlatlineLevel] = useState(3);
 
   const {
     data: children = [],
@@ -47,6 +68,24 @@ export default function ChildrenScreen() {
     queryKey: ["/api/children"],
     enabled: !!user,
   });
+
+  const selectedChildren = useMemo(
+    () => children.filter((c) => selectedIds.has(c.id)),
+    [children, selectedIds],
+  );
+
+  const youngestChild = useMemo(() => {
+    if (selectedChildren.length === 0) return null;
+    return selectedChildren.reduce((youngest, child) => {
+      const childAge = getAge(child.birthMonth, child.birthYear);
+      const youngestAge = getAge(youngest.birthMonth, youngest.birthYear);
+      return childAge < youngestAge ? child : youngest;
+    });
+  }, [selectedChildren]);
+
+  const youngestAge = youngestChild
+    ? getAge(youngestChild.birthMonth, youngestChild.birthYear)
+    : null;
 
   const toggleChild = (id: string) => {
     setSelectedIds((prev) => {
@@ -60,7 +99,7 @@ export default function ChildrenScreen() {
     });
   };
 
-  const handleStartSession = () => {
+  const handlePreviewSession = () => {
     if (selectedIds.size === 0) {
       Alert.alert(
         "Select Children",
@@ -68,14 +107,19 @@ export default function ChildrenScreen() {
       );
       return;
     }
-    const selectedChildren = children.filter((c) => selectedIds.has(c.id));
-    const params = {
-      childIds: Array.from(selectedIds).join(","),
-      childNames: selectedChildren.map((c) => c.name).join(","),
-    };
+    const selectedNames = selectedChildren.map((c) => c.name);
     router.push({
-      pathname: "/(main)/session-config",
-      params,
+      pathname: "/(main)/playlist-preview",
+      params: {
+        childIds: Array.from(selectedIds).join(","),
+        childNames: selectedNames.join(","),
+        sessionMinutes: String(sessionMinutes),
+        taperMode,
+        flatlineLevel: String(flatlineLevel),
+        includeWindDown: "1",
+        finishMode: "soft",
+        youngChildProtection: youngChildProtection ? "1" : "0",
+      },
     });
   };
 
@@ -86,52 +130,12 @@ export default function ChildrenScreen() {
     ]);
   };
 
-  const renderChild = ({
-    item,
-    index,
-  }: {
-    item: Child;
-    index: number;
-  }) => {
-    const age = getAge(item.birthMonth, item.birthYear);
-    const isSelected = selectedIds.has(item.id);
-    const avatarColor = colors.avatars[index % colors.avatars.length];
-
-    return (
-      <TouchableOpacity
-        style={[styles.childCard, isSelected && styles.childCardSelected]}
-        onPress={() => toggleChild(item.id)}
-        activeOpacity={0.7}
-        testID={`card-child-${item.id}`}
-      >
-        <View style={[styles.avatar, { backgroundColor: avatarColor }]}>
-          <Text style={styles.avatarText}>{getInitials(item.name)}</Text>
-        </View>
-        <Text style={styles.childName}>{item.name}</Text>
-        <Text style={styles.childAge}>
-          {age} year{age !== 1 ? "s" : ""} old
-        </Text>
-        <View style={styles.limitRow}>
-          <Feather name="clock" size={12} color={colors.textTertiary} />
-          <Text style={styles.childTime}>
-            {item.entertainmentMinutes}m daily
-          </Text>
-        </View>
-        {isSelected && (
-          <View style={styles.checkmark}>
-            <Feather name="check" size={14} color={colors.white} />
-          </View>
-        )}
-      </TouchableOpacity>
-    );
-  };
-
   if (isLoading) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <ActivityIndicator
           size="large"
-          color={colors.primary}
+          color={DARK.accent}
           style={styles.loader}
         />
       </View>
@@ -153,45 +157,196 @@ export default function ChildrenScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Text style={styles.headerTitle}>
-            {isCaregiver ? "Caregiver Session" : "SafeWatch"}
-          </Text>
-          <Text style={styles.headerSubtitle}>
-            {children.length > 0
-              ? "Select children for this session"
-              : "No children configured yet"}
-          </Text>
-        </View>
         <TouchableOpacity
           onPress={handleLogout}
-          style={styles.logoutButton}
+          style={styles.closeButton}
           testID="button-logout"
         >
-          <Feather name="log-out" size={20} color={colors.textSecondary} />
+          <Feather name="x" size={22} color={DARK.textSecondary} />
         </TouchableOpacity>
       </View>
 
-      {children.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Feather name="users" size={48} color={colors.textTertiary} />
-          <Text style={styles.emptyText}>No children found</Text>
-          <Text style={styles.emptySubtext}>
-            Add children from the SafeWatch web dashboard to get started.
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={children}
-          renderItem={renderChild}
-          keyExtractor={(item) => item.id}
-          numColumns={2}
-          columnWrapperStyle={styles.row}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          scrollEnabled={children.length > 0}
-        />
-      )}
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={styles.title}>Start Viewing Session</Text>
+        <Text style={styles.subtitle}>
+          Select which children will be watching together. This helps us choose
+          appropriate content for everyone.
+        </Text>
+
+        {children.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Feather name="users" size={48} color={DARK.textMuted} />
+            <Text style={styles.emptyText}>No children found</Text>
+            <Text style={styles.emptySubtext}>
+              Add children from the SafeWatch web dashboard to get started.
+            </Text>
+          </View>
+        ) : (
+          <>
+            <View style={styles.avatarRow}>
+              {children.map((child, index) => {
+                const isSelected = selectedIds.has(child.id);
+                return (
+                  <TouchableOpacity
+                    key={child.id}
+                    style={styles.avatarItem}
+                    onPress={() => toggleChild(child.id)}
+                    activeOpacity={0.7}
+                    testID={`avatar-${child.id}`}
+                  >
+                    <View
+                      style={[
+                        styles.avatar,
+                        isSelected && styles.avatarSelected,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.avatarText,
+                          isSelected && styles.avatarTextSelected,
+                        ]}
+                      >
+                        {getInitials(child.name)}
+                      </Text>
+                      {isSelected && (
+                        <View style={styles.checkBadge}>
+                          <Feather
+                            name="check"
+                            size={10}
+                            color={DARK.bg}
+                          />
+                        </View>
+                      )}
+                    </View>
+                    <Text
+                      style={[
+                        styles.avatarName,
+                        isSelected && styles.avatarNameSelected,
+                      ]}
+                    >
+                      {child.name}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {selectedChildren.length > 0 && youngestAge !== null && youngestAge <= 5 && (
+              <View style={styles.protectionCard}>
+                <View style={styles.protectionLeft}>
+                  <View style={styles.protectionIcon}>
+                    <Feather name="shield" size={18} color={DARK.accent} />
+                  </View>
+                  <View style={styles.protectionInfo}>
+                    <Text style={styles.protectionTitle}>
+                      Young Child Protection
+                    </Text>
+                    <Text style={styles.protectionDesc}>
+                      Restrict content to age {youngestAge} ({youngestChild?.name})
+                    </Text>
+                  </View>
+                </View>
+                <Switch
+                  value={youngChildProtection}
+                  onValueChange={setYoungChildProtection}
+                  trackColor={{ false: DARK.border, true: DARK.accent }}
+                  thumbColor={DARK.text}
+                  testID="switch-young-child"
+                />
+              </View>
+            )}
+
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Session Length</Text>
+                <Text style={styles.minutesValue}>{sessionMinutes} min</Text>
+              </View>
+              <Slider
+                style={styles.slider}
+                minimumValue={10}
+                maximumValue={120}
+                step={5}
+                value={sessionMinutes}
+                onValueChange={setSessionMinutes}
+                minimumTrackTintColor={DARK.accent}
+                maximumTrackTintColor={DARK.border}
+                thumbTintColor={DARK.text}
+                testID="slider-session-length"
+              />
+              <View style={styles.sliderLabels}>
+                <Text style={styles.sliderLabel}>10 min</Text>
+                <Text style={styles.sliderLabel}>120 min</Text>
+              </View>
+            </View>
+
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Energy Pattern</Text>
+              <View style={styles.taperGrid}>
+                {TAPER_MODES.map((mode) => {
+                  const isActive = taperMode === mode.value;
+                  return (
+                    <TouchableOpacity
+                      key={mode.value}
+                      style={[
+                        styles.taperCard,
+                        isActive && styles.taperCardActive,
+                      ]}
+                      onPress={() => setTaperMode(mode.value)}
+                      activeOpacity={0.7}
+                      testID={`taper-${mode.value}`}
+                    >
+                      <Feather
+                        name={mode.icon as any}
+                        size={24}
+                        color={isActive ? DARK.accent : DARK.textMuted}
+                      />
+                      <Text
+                        style={[
+                          styles.taperLabel,
+                          isActive && styles.taperLabelActive,
+                        ]}
+                      >
+                        {mode.label}
+                      </Text>
+                      <Text style={styles.taperDesc}>{mode.description}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            {taperMode === "flatline" && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Energy Level</Text>
+                <View style={styles.stimRow}>
+                  {[1, 2, 3, 4, 5].map((level) => (
+                    <TouchableOpacity
+                      key={level}
+                      onPress={() => setFlatlineLevel(level)}
+                      style={[
+                        styles.stimButton,
+                        {
+                          backgroundColor:
+                            flatlineLevel >= level
+                              ? colors.stimulation[flatlineLevel] ||
+                                DARK.textMuted
+                              : DARK.border,
+                        },
+                      ]}
+                    >
+                      <Text style={styles.stimButtonText}>{level}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
+          </>
+        )}
+      </ScrollView>
 
       {children.length > 0 && (
         <View
@@ -199,19 +354,29 @@ export default function ChildrenScreen() {
         >
           <TouchableOpacity
             style={[
-              styles.startButton,
-              selectedIds.size === 0 && styles.startButtonDisabled,
+              styles.previewButton,
+              selectedIds.size === 0 && styles.previewButtonDisabled,
             ]}
-            onPress={handleStartSession}
+            onPress={handlePreviewSession}
             disabled={selectedIds.size === 0}
             activeOpacity={0.8}
-            testID="button-start-session"
+            testID="button-preview-session"
           >
-            <Feather name="play" size={20} color={colors.white} />
-            <Text style={styles.startButtonText}>
-              Start Session
+            <Feather name="play" size={18} color={DARK.bg} />
+            <Text style={styles.previewButtonText}>
+              Preview Session
               {selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
             </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => {
+              setSelectedIds(new Set());
+            }}
+            style={styles.cancelButton}
+            testID="button-cancel"
+          >
+            <Text style={styles.cancelButtonText}>Cancel</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -222,58 +387,63 @@ export default function ChildrenScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: DARK.bg,
   },
   loader: {
     flex: 1,
   },
   header: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
+    justifyContent: "flex-end",
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.md,
+    paddingTop: spacing.sm,
   },
-  headerLeft: {
-    flex: 1,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontFamily: "Inter_700Bold",
-    color: colors.text,
-  },
-  headerSubtitle: {
-    fontSize: 15,
-    fontFamily: "Inter_400Regular",
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  logoutButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.surface,
+  closeButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: DARK.card,
     justifyContent: "center",
     alignItems: "center",
-    marginTop: 4,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: 200,
+  },
+  title: {
+    fontSize: 24,
+    fontFamily: "Inter_700Bold",
+    color: DARK.text,
+    textAlign: "center",
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  subtitle: {
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    color: DARK.textSecondary,
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: spacing.lg,
+    paddingHorizontal: spacing.md,
   },
   emptyContainer: {
-    flex: 1,
-    justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.xxl,
     gap: spacing.sm,
   },
   emptyText: {
     fontSize: 18,
     fontFamily: "Inter_600SemiBold",
-    color: colors.text,
+    color: DARK.text,
   },
   emptySubtext: {
     fontSize: 14,
     fontFamily: "Inter_400Regular",
-    color: colors.textSecondary,
+    color: DARK.textSecondary,
     textAlign: "center",
     lineHeight: 20,
   },
@@ -287,117 +457,228 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 18,
     fontFamily: "Inter_600SemiBold",
-    color: colors.text,
+    color: DARK.text,
   },
   errorDetail: {
     fontSize: 14,
     fontFamily: "Inter_400Regular",
-    color: colors.textSecondary,
+    color: DARK.textSecondary,
     textAlign: "center",
   },
-  listContent: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: 120,
+  avatarRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: spacing.lg,
+    marginBottom: spacing.lg,
   },
-  row: {
-    gap: spacing.md,
-    marginBottom: spacing.md,
-  },
-  childCard: {
-    flex: 1,
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
+  avatarItem: {
     alignItems: "center",
-    borderWidth: 2,
-    borderColor: colors.border,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  childCardSelected: {
-    borderColor: colors.primary,
-    backgroundColor: "#f0f5ff",
+    gap: spacing.xs,
   },
   avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: DARK.avatarBg,
     justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "transparent",
+  },
+  avatarSelected: {
+    backgroundColor: DARK.avatarSelected,
+    borderColor: DARK.accent,
+  },
+  avatarText: {
+    color: DARK.textSecondary,
+    fontSize: 22,
+    fontFamily: "Inter_700Bold",
+  },
+  avatarTextSelected: {
+    color: DARK.accent,
+  },
+  avatarName: {
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+    color: DARK.textSecondary,
+  },
+  avatarNameSelected: {
+    color: DARK.accent,
+  },
+  checkBadge: {
+    position: "absolute",
+    top: -2,
+    right: -2,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: DARK.accent,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: DARK.bg,
+  },
+  protectionCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: DARK.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: DARK.border,
+  },
+  protectionLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    gap: spacing.sm,
+  },
+  protectionIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(45, 212, 168, 0.1)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  protectionInfo: {
+    flex: 1,
+  },
+  protectionTitle: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+    color: DARK.text,
+  },
+  protectionDesc: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    color: DARK.textSecondary,
+    marginTop: 1,
+  },
+  section: {
+    marginBottom: spacing.lg,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
     marginBottom: spacing.sm,
   },
-  avatarText: {
-    color: colors.white,
-    fontSize: 20,
-    fontFamily: "Inter_700Bold",
-  },
-  childName: {
+  sectionTitle: {
     fontSize: 16,
     fontFamily: "Inter_600SemiBold",
-    color: colors.text,
-    textAlign: "center",
+    color: DARK.text,
+    marginBottom: spacing.sm,
   },
-  childAge: {
-    fontSize: 13,
-    fontFamily: "Inter_400Regular",
-    color: colors.textSecondary,
-    marginTop: 2,
+  minutesValue: {
+    fontSize: 16,
+    fontFamily: "Inter_700Bold",
+    color: DARK.accent,
+    marginBottom: spacing.sm,
   },
-  limitRow: {
+  slider: {
+    width: "100%",
+    height: 40,
+  },
+  sliderLabels: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    marginTop: 4,
+    justifyContent: "space-between",
+    marginTop: -4,
   },
-  childTime: {
+  sliderLabel: {
     fontSize: 12,
     fontFamily: "Inter_400Regular",
-    color: colors.textTertiary,
+    color: DARK.textMuted,
   },
-  checkmark: {
-    position: "absolute",
-    top: spacing.sm,
-    right: spacing.sm,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: colors.primary,
+  taperGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+  },
+  taperCard: {
+    width: "47%",
+    flexGrow: 1,
+    backgroundColor: DARK.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    alignItems: "center",
+    gap: 6,
+    borderWidth: 2,
+    borderColor: DARK.border,
+  },
+  taperCardActive: {
+    borderColor: DARK.accent,
+    backgroundColor: "rgba(45, 212, 168, 0.05)",
+  },
+  taperLabel: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+    color: DARK.text,
+  },
+  taperLabelActive: {
+    color: DARK.accent,
+  },
+  taperDesc: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+    color: DARK.textSecondary,
+    textAlign: "center",
+  },
+  stimRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    justifyContent: "center",
+  },
+  stimButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: "center",
     alignItems: "center",
   },
-  footer: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: spacing.lg,
-    backgroundColor: colors.background,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+  stimButtonText: {
+    fontSize: 16,
+    fontFamily: "Inter_700Bold",
+    color: "#fff",
   },
-  startButton: {
-    backgroundColor: colors.primary,
+  footer: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    backgroundColor: DARK.bg,
+    borderTopWidth: 1,
+    borderTopColor: DARK.border,
+  },
+  previewButton: {
+    backgroundColor: DARK.accent,
     borderRadius: borderRadius.md,
     paddingVertical: 16,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
   },
-  startButtonDisabled: {
-    opacity: 0.4,
+  previewButtonDisabled: {
+    opacity: 0.3,
   },
-  startButtonText: {
-    color: colors.white,
+  previewButtonText: {
+    color: DARK.bg,
     fontSize: 17,
     fontFamily: "Inter_600SemiBold",
+  },
+  cancelButton: {
+    alignItems: "center",
+    paddingVertical: 14,
+    backgroundColor: DARK.card,
+    borderRadius: borderRadius.md,
+    marginTop: spacing.sm,
+    borderWidth: 1,
+    borderColor: DARK.border,
+  },
+  cancelButtonText: {
+    color: DARK.text,
+    fontSize: 16,
+    fontFamily: "Inter_500Medium",
   },
 });

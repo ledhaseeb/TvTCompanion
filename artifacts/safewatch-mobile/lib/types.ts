@@ -78,13 +78,13 @@ export const TAPER_MODES: {
   {
     value: "taper_down",
     label: "Calm Down",
-    description: "Starts energetic, ends calm",
+    description: "Starts exciting, gradually calms",
     icon: "trending-down",
   },
   {
     value: "taper_up",
     label: "Build Up",
-    description: "Starts calm, builds energy",
+    description: "Starts calm, gradually energizes",
     icon: "trending-up",
   },
   {
