@@ -300,7 +300,7 @@ export default function StartSessionScreen() {
                       testID={`taper-${mode.value}`}
                     >
                       <Feather
-                        name={mode.icon as any}
+                        name={mode.icon}
                         size={24}
                         color={isActive ? DARK.accent : DARK.textMuted}
                       />

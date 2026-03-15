@@ -73,7 +73,7 @@ export const TAPER_MODES: {
   value: TaperMode;
   label: string;
   description: string;
-  icon: string;
+  icon: "trending-down" | "trending-up" | "activity" | "minus";
 }[] = [
   {
     value: "taper_down",

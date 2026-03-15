@@ -12,12 +12,15 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
+import type { ComponentProps } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { apiRequest } from "@/lib/query-client";
 import { useSession } from "@/contexts/SessionContext";
 import { colors, spacing, borderRadius } from "@/constants/colors";
 import type { Video, TaperMode, PlaylistResponse } from "@/lib/types";
 import { TAPER_MODES } from "@/lib/types";
+
+type FeatherIconName = ComponentProps<typeof Feather>["name"];
 
 const DARK = {
   bg: "#0f1923",
@@ -58,9 +61,14 @@ function getTaperLabel(mode: TaperMode): string {
   return found ? found.label : mode;
 }
 
-function getTaperIcon(mode: TaperMode): string {
-  const found = TAPER_MODES.find((m) => m.value === mode);
-  return found ? found.icon : "minus";
+function getTaperIcon(mode: TaperMode): FeatherIconName {
+  const iconMap: Record<TaperMode, FeatherIconName> = {
+    taper_down: "trending-down",
+    taper_up: "trending-up",
+    taper_up_down: "activity",
+    flatline: "minus",
+  };
+  return iconMap[mode] || "minus";
 }
 
 function StimDots({ level }: { level: number }) {
@@ -172,11 +180,9 @@ function VideoCard({
 function WindDownVideoCard({
   video,
   onReplace,
-  onRemove,
 }: {
   video: Video;
   onReplace: () => void;
-  onRemove: () => void;
 }) {
   const thumbnailUrl =
     video.customThumbnailUrl ||
@@ -513,7 +519,7 @@ export default function PlaylistPreviewScreen() {
           </View>
           <View style={styles.statItem}>
             <Feather
-              name={getTaperIcon(taperMode) as any}
+              name={getTaperIcon(taperMode)}
               size={13}
               color={DARK.textSecondary}
             />
@@ -589,7 +595,6 @@ export default function PlaylistPreviewScreen() {
                     );
                   }
                 }}
-                onRemove={() => setIncludeWindDown(false)}
               />
             </>
           )}
