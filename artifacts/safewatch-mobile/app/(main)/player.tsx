@@ -8,6 +8,7 @@ import {
   StatusBar,
   Dimensions,
   Animated,
+  ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
@@ -36,6 +37,7 @@ export default function PlayerScreen() {
   const [playing, setPlaying] = useState(true);
   const [elapsed, setElapsed] = useState(0);
   const [showControls, setShowControls] = useState(true);
+  const [ready, setReady] = useState(false);
   const controlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const watchStartRef = useRef(Date.now());
   const totalWatchedRef = useRef(0);
@@ -43,6 +45,12 @@ export default function PlayerScreen() {
 
   const { width: screenWidth } = Dimensions.get("window");
   const playerHeight = Math.round((screenWidth * 9) / 16);
+
+  useEffect(() => {
+    if (session.isActive && session.playlist.length > 0) {
+      setReady(true);
+    }
+  }, [session.isActive, session.playlist.length]);
 
   const currentVideo =
     session.playlist.length > 0
@@ -168,7 +176,14 @@ export default function PlayerScreen() {
     }
   }, [session.isActive, session.sessionId]);
 
-  if (!currentVideo || !session.isActive) {
+  if (!ready || !currentVideo || !session.isActive) {
+    if (!ready) {
+      return (
+        <View style={styles.container}>
+          <ActivityIndicator size="large" color="#a78bfa" />
+        </View>
+      );
+    }
     return (
       <View style={styles.container}>
         <Text style={styles.endText}>Session Complete</Text>

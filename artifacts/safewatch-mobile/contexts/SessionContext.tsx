@@ -3,6 +3,8 @@ import {
   useContext,
   useState,
   useCallback,
+  useRef,
+  useEffect,
   type ReactNode,
 } from "react";
 import { apiRequest, apiRequestRaw } from "@/lib/query-client";
@@ -86,6 +88,27 @@ const SessionContext = createContext<SessionContextType>({
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<SessionState>(initialSession);
+  const sessionRef = useRef<SessionState>(initialSession);
+
+  useEffect(() => {
+    sessionRef.current = session;
+  }, [session]);
+
+  const updateSession = useCallback((next: SessionState) => {
+    sessionRef.current = next;
+    setSession(next);
+  }, []);
+
+  const updateSessionFn = useCallback(
+    (fn: (prev: SessionState) => SessionState) => {
+      setSession((prev) => {
+        const next = fn(prev);
+        sessionRef.current = next;
+        return next;
+      });
+    },
+    [],
+  );
 
   const startSession = useCallback(
     async (params: {
@@ -144,7 +167,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         throw new Error("Failed to create session");
       }
 
-      setSession({
+      updateSession({
         sessionId,
         childIds: params.childIds,
         childNames: params.childNames,
@@ -164,25 +187,26 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
       return sessionId;
     },
-    [],
+    [updateSession],
   );
 
   const endSession = useCallback(async () => {
-    if (session.sessionId) {
+    const cur = sessionRef.current;
+    if (cur.sessionId) {
       try {
-        await apiRequest("PATCH", `/api/sessions/${session.sessionId}`, {
+        await apiRequest("PATCH", `/api/sessions/${cur.sessionId}`, {
           endedAt: new Date().toISOString(),
-          totalDurationSeconds: session.totalSecondsWatched,
+          totalDurationSeconds: cur.totalSecondsWatched,
         });
       } catch (err: unknown) {
         console.warn("Failed to end session on server:", err instanceof Error ? err.message : err);
       }
     }
-    setSession((prev) => ({ ...prev, isActive: false }));
-  }, [session.sessionId, session.totalSecondsWatched]);
+    updateSessionFn((prev) => ({ ...prev, isActive: false }));
+  }, [updateSessionFn]);
 
   const advanceVideo = useCallback(() => {
-    setSession((prev) => {
+    updateSessionFn((prev) => {
       const nextIndex = prev.currentIndex + 1;
       if (nextIndex >= prev.playlist.length) {
         if (prev.includeWindDown && prev.calmingVideos.length > 0) {
@@ -197,19 +221,25 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       }
       return { ...prev, currentIndex: nextIndex };
     });
-  }, []);
+  }, [updateSessionFn]);
 
-  const setCurrentIndex = useCallback((index: number) => {
-    setSession((prev) => ({ ...prev, currentIndex: index }));
-  }, []);
+  const setCurrentIndex = useCallback(
+    (index: number) => {
+      updateSessionFn((prev) => ({ ...prev, currentIndex: index }));
+    },
+    [updateSessionFn],
+  );
 
-  const updateWatchTime = useCallback((seconds: number) => {
-    setSession((prev) => ({ ...prev, totalSecondsWatched: seconds }));
-  }, []);
+  const updateWatchTime = useCallback(
+    (seconds: number) => {
+      updateSessionFn((prev) => ({ ...prev, totalSecondsWatched: seconds }));
+    },
+    [updateSessionFn],
+  );
 
   const resetSession = useCallback(() => {
-    setSession(initialSession);
-  }, []);
+    updateSession(initialSession);
+  }, [updateSession]);
 
   return (
     <SessionContext.Provider
