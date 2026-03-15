@@ -520,13 +520,6 @@ export default function PlaylistPreviewScreen() {
           <Feather name="play" size={18} color={DARK.text} />
           <Text style={styles.headerTitle}>Group Session Preview</Text>
         </View>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.closeButton}
-          testID="button-close"
-        >
-          <Feather name="x" size={20} color={DARK.textSecondary} />
-        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -709,16 +702,7 @@ export default function PlaylistPreviewScreen() {
           style={styles.cancelButton}
           testID="button-cancel"
         >
-          <Text style={styles.cancelButtonText}>Cancel</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backLink}
-          testID="button-back"
-        >
-          <Feather name="arrow-left" size={16} color={DARK.textSecondary} />
-          <Text style={styles.backLinkText}>Back</Text>
+          <Text style={styles.cancelButtonText}>Back</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -776,7 +760,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
+    paddingTop: spacing.xl + spacing.sm,
     paddingBottom: spacing.md,
   },
   headerLeft: {
