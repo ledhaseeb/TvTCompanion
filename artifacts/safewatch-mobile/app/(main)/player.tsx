@@ -125,6 +125,23 @@ export default function PlayerScreen() {
     [currentVideo, session.sessionId],
   );
 
+  const handlePlayerError = useCallback(
+    (error: string) => {
+      console.warn("[Player] YouTube error:", error, "videoId:", currentVideo?.youtubeId);
+      Alert.alert(
+        "Video Unavailable",
+        `"${currentVideo?.title}" couldn't be played. Skipping to next video.`,
+        [
+          {
+            text: "OK",
+            onPress: () => advanceVideo(),
+          },
+        ],
+      );
+    },
+    [currentVideo, advanceVideo],
+  );
+
   const recordWatchHistory = async () => {
     if (!currentVideo || !session.sessionId) return;
     try {
@@ -205,14 +222,23 @@ export default function PlayerScreen() {
       >
         {!isCasting && (
           <YoutubePlayer
+            key={currentVideo.youtubeId}
             height={playerHeight}
             width={screenWidth}
             play={playing}
             videoId={currentVideo.youtubeId}
             onChangeState={handleStateChange}
+            onError={handlePlayerError}
+            initialPlayerParams={{
+              modestbranding: true,
+              rel: false,
+              preventFullScreen: false,
+            }}
             webViewProps={{
               allowsInlineMediaPlayback: true,
               mediaPlaybackRequiresUserAction: false,
+              userAgent:
+                "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
             }}
           />
         )}
