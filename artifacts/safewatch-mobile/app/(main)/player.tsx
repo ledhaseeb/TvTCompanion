@@ -155,20 +155,20 @@ export default function PlayerScreen() {
     advanceVideo();
   };
 
-  if (!currentVideo || !session.isActive) {
-    useEffect(() => {
-      if (!session.isActive && session.sessionId) {
-        router.replace({
-          pathname: "/(main)/session-feedback" as any,
-          params: {
-            sessionId: session.sessionId,
-            childIds: session.childIds.join(","),
-            childNames: session.childNames.join(","),
-          },
-        });
-      }
-    }, [session.isActive]);
+  useEffect(() => {
+    if (!session.isActive && session.sessionId) {
+      router.replace({
+        pathname: "/(main)/session-feedback" as any,
+        params: {
+          sessionId: session.sessionId,
+          childIds: session.childIds.join(","),
+          childNames: session.childNames.join(","),
+        },
+      });
+    }
+  }, [session.isActive, session.sessionId]);
 
+  if (!currentVideo || !session.isActive) {
     return (
       <View style={styles.container}>
         <Text style={styles.endText}>Session Complete</Text>
