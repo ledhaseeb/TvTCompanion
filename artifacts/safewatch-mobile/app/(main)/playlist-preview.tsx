@@ -320,7 +320,21 @@ export default function PlaylistPreviewScreen() {
         flatlineLevel,
       });
       const data = await res.json();
-      setPlaylist(normalizeVideos(data.playlist));
+      if (data.playlist?.[0]) {
+        console.log("[Playlist] RAW first video keys:", Object.keys(data.playlist[0]).join(", "));
+        console.log("[Playlist] RAW first video snippet:", JSON.stringify({
+          id: data.playlist[0].id,
+          youtubeId: data.playlist[0].youtubeId,
+          youtube_id: data.playlist[0].youtube_id,
+          youtube_video_id: data.playlist[0].youtube_video_id,
+          title: data.playlist[0].title,
+        }));
+      }
+      const normalized = normalizeVideos(data.playlist);
+      if (normalized[0]) {
+        console.log("[Playlist] NORMALIZED first video youtubeId:", normalized[0].youtubeId);
+      }
+      setPlaylist(normalized);
       setCalmingVideos(normalizeVideos(data.calmingVideos || data.calming_videos || []));
       const rawCandidates = data.replacementCandidates || data.replacement_candidates || {};
       const normCandidates: Record<number, Video[]> = {};
