@@ -14,7 +14,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import type { ComponentProps } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { apiRequest } from "@/lib/query-client";
+import { apiRequest, apiRequestRaw } from "@/lib/query-client";
 import { useSession, SessionConflictError } from "@/contexts/SessionContext";
 import { colors, spacing, borderRadius } from "@/constants/colors";
 import type { Video, TaperMode, PlaylistResponse } from "@/lib/types";
@@ -366,6 +366,31 @@ export default function PlaylistPreviewScreen() {
   };
 
   const handleReplace = async (index: number) => {
+    try {
+      const res = await apiRequestRaw("POST", "/api/sessions/playlist/replace", {
+        childIds,
+        currentPlaylistVideoIds: playlist.map((v) => v.id),
+        replaceIndex: index,
+        taperMode,
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.playlist) {
+          setPlaylist(data.playlist);
+        } else if (data.video) {
+          const newPlaylist = [...playlist];
+          newPlaylist[index] = data.video;
+          setPlaylist(newPlaylist);
+        }
+        return;
+      }
+      if (res.status === 404) {
+        Alert.alert("No Alternatives", "No replacement videos available for this position.");
+        return;
+      }
+    } catch {
+    }
+
     const candidates = replacementCandidates[index];
     if (!candidates || candidates.length === 0) {
       Alert.alert("No Alternatives", "No replacement videos available.");
@@ -422,8 +447,8 @@ export default function PlaylistPreviewScreen() {
     } catch (err: unknown) {
       if (err instanceof SessionConflictError) {
         Alert.alert(
-          "Active Session on Another Device",
-          "Starting this session will close the one currently running on the other device. Do you want to continue?",
+          "Session Conflict",
+          `${err.message}\n\nStarting this session will close the existing one. Continue?`,
           [
             {
               text: "Cancel",
@@ -626,7 +651,20 @@ export default function PlaylistPreviewScreen() {
               </View>
               <WindDownVideoCard
                 video={windDownVideo}
-                onReplace={() => {
+                onReplace={async () => {
+                  try {
+                    const res = await apiRequest("POST", "/api/sessions/playlist/replace-calming", {
+                      childIds,
+                      currentCalmingVideoId: windDownVideo.id,
+                    });
+                    const data = await res.json();
+                    if (data.calmingVideos && data.calmingVideos.length > 0) {
+                      setCalmingVideos(data.calmingVideos);
+                      return;
+                    }
+                  } catch {
+                  }
+
                   if (calmingVideos.length > 1) {
                     const others = calmingVideos.slice(1);
                     const replacement =

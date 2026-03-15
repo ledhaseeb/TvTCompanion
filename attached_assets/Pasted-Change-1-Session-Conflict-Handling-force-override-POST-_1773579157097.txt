@@ -1,0 +1,83 @@
+Change 1: Session Conflict Handling (force override)
+POST /api/sessions now returns 409 when there's already an active session for the selected children.
+
+409 Response:
+
+{
+  "error": "Session conflict",
+  "message": "Nelly already has an active session started by Haseeb Ibrahim",
+  "activeSession": {
+    "id": "uuid",
+    "userId": "uuid",
+    "userName": "Haseeb Ibrahim",
+    "childIds": ["uuid"]
+  }
+}
+To override: Resend the same request with "force": true in the body. The server ends all conflicting sessions before creating the new one.
+
+Mobile should:
+
+On 409, show a dialog with the message from the response
+Offer "Continue anyway" or "Cancel"
+Continue retries with force: true, Cancel goes back
+Change 2: Server-First Video Replacement
+The replace button should now call the server first instead of using the local candidate pool. This ensures replacements respect the energy/taper pattern based on position.
+
+Why the local pool is wrong for this: It has no awareness of taper mode or the stim levels of surrounding videos. A high-energy video could end up in a wind-down section.
+
+API: POST /api/sessions/playlist/replace
+Request:
+
+{
+  "childIds": ["child-uuid"],
+  "currentPlaylistVideoIds": ["vid-1", "vid-2", "vid-3"],
+  "replaceIndex": 1,
+  "taperMode": "taper_down"
+}
+200 Response:
+
+{
+  "video": { /* replacement video object */ },
+  "playlist": [ /* full updated playlist */ ]
+}
+404: No suitable replacement found.
+
+How the server picks replacements
+Based on taperMode and the video's neighbours:
+
+taper_down: stim must be ≤ previous video, ≥ next video
+taper_up: stim must be ≥ previous video, ≤ next video
+taper_up_down: up-rules before peak, down-rules after
+flatline: within ±1 of current stim
+Also enforces show diversity (no duplicate series), age, region, hidden/disliked filters.
+
+Recommended flow
+1. Try server POST /api/sessions/playlist/replace
+2. If success → use response.video or response.playlist
+3. If network error/timeout → fall back to local pool
+Keep the local pool as offline fallback only.
+
+Change 3: Wind-Down Videos Excluded from Entertainment Replace
+Calming videos (stim level 0) must never appear when replacing entertainment videos:
+
+If the mobile app has a local stim-level loop for replacements, start at 1 not 0
+The server replacementCandidates pool (from POST /api/sessions/playlist) no longer includes stim 0 videos
+Calming video replacement uses its own endpoint: POST /api/sessions/playlist/replace-calming
+Calming replace API: POST /api/sessions/playlist/replace-calming
+Request:
+
+{
+  "childIds": ["child-uuid"],
+  "currentCalmingVideoId": "video-id"
+}
+Response:
+
+{
+  "calmingVideos": [ /* array of calming video objects */ ]
+}
+Summary
+Area	What to do
+Session creation	Handle 409, show conflict dialog, retry with force: true
+Video replace	Server endpoint first, local pool as offline fallback only
+Calming replace	Use separate /replace-calming endpoint
+Pool filtering	Local stim loops start at 1, not 0
