@@ -82,7 +82,7 @@ Expo React Native companion app for SafeWatch — manages children's screen time
 
 - **Auth**: Firebase email/password + Google Sign-In (Google requires dev client build)
 - **Navigation**: expo-router with stack navigation (no tabs)
-- **Screens**: Login → Children Selection → Session Config → Playlist Preview → Player → Feedback
+- **Screens**: Login → Start Viewing Session (combined child selection + session config) → Playlist Preview → Player → Feedback
 - **YouTube**: react-native-youtube-iframe for embedded playback
 - **Chromecast**: Stubbed CastContext (requires dev client build for real Chromecast)
 - **State**: React Context (AuthContext, SessionContext, CastContext) + React Query
@@ -91,9 +91,8 @@ Expo React Native companion app for SafeWatch — manages children's screen time
 
 - `app/index.tsx` — Login screen (email/password auth)
 - `app/invite.tsx` — Caregiver invitation acceptance
-- `app/(main)/children.tsx` — Child selection grid
-- `app/(main)/session-config.tsx` — Duration, energy pattern, wind-down settings
-- `app/(main)/playlist-preview.tsx` — Review/shuffle/replace playlist before starting
+- `app/(main)/children.tsx` — Combined "Start Viewing Session" screen (child selection + young child protection + session length + energy pattern)
+- `app/(main)/playlist-preview.tsx` — Dark-themed playlist preview with thumbnails, stim dots, HD/SD badges, age ratings, wind-down toggle, session progress bar
 - `app/(main)/player.tsx` — YouTube player with session timer and controls
 - `app/(main)/session-feedback.tsx` — Post-session behavior rating
 - `lib/auth.ts` — Firebase auth wrapper (signIn, signUp, token management)
