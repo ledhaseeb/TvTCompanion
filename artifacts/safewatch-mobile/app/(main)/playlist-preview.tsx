@@ -25,7 +25,7 @@ type FeatherIconName = ComponentProps<typeof Feather>["name"];
 function normalizeVideo(v: Record<string, unknown>): Video {
   return {
     id: (v.id as string) || "",
-    youtubeId: (v.youtubeId || v.youtube_id || "") as string,
+    youtubeId: (v.youtubeId || v.youtube_id || v.youtube_video_id || "") as string,
     title: (v.title as string) || "",
     channelId: (v.channelId || v.channel_id || null) as string | null,
     youtubeChannelId: (v.youtubeChannelId || v.youtube_channel_id || null) as string | null,
