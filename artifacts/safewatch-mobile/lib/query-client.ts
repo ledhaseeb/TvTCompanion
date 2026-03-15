@@ -34,6 +34,23 @@ export async function apiRequest(
   return res;
 }
 
+export async function apiRequestRaw(
+  method: string,
+  path: string,
+  data?: unknown,
+): Promise<Response> {
+  const authHeaders = await getAuthHeaders();
+  const url = apiUrl(path);
+  return fetch(url, {
+    method,
+    headers: {
+      ...authHeaders,
+      ...(data ? { "Content-Type": "application/json" } : {}),
+    },
+    body: data ? JSON.stringify(data) : undefined,
+  });
+}
+
 const defaultQueryFn: QueryFunction = async ({ queryKey }) => {
   const path = queryKey.join("/");
   const authHeaders = await getAuthHeaders();

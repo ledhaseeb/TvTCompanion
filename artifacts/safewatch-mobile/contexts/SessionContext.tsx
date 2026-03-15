@@ -5,8 +5,17 @@ import {
   useCallback,
   type ReactNode,
 } from "react";
-import { apiRequest } from "@/lib/query-client";
+import { apiRequest, apiRequestRaw } from "@/lib/query-client";
 import type { Video, TaperMode } from "@/lib/types";
+
+export class SessionConflictError extends Error {
+  conflictMessage: string;
+  constructor(message: string) {
+    super(message);
+    this.name = "SessionConflictError";
+    this.conflictMessage = message;
+  }
+}
 
 interface SessionState {
   sessionId: string | null;
@@ -38,6 +47,7 @@ interface SessionContextType {
     flatlineLevel: number;
     sessionMinutes: number;
     finishMode: "soft" | "hard";
+    force?: boolean;
   }) => Promise<string | null>;
   endSession: () => Promise<void>;
   advanceVideo: () => void;
@@ -88,15 +98,38 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       flatlineLevel: number;
       sessionMinutes: number;
       finishMode: "soft" | "hard";
+      force?: boolean;
     }): Promise<string | null> => {
-      const res = await apiRequest("POST", "/api/sessions", {
+      const body: Record<string, unknown> = {
         childIds: params.childIds,
         totalDurationSeconds: params.sessionMinutes * 60,
         taperMode: params.taperMode,
         flatlineLevel: params.flatlineLevel,
         includeWindDown: params.includeWindDown,
         finishMode: params.finishMode,
-      });
+      };
+      if (params.force) {
+        body.force = true;
+      }
+
+      const res = await apiRequestRaw("POST", "/api/sessions", body);
+
+      if (res.status === 409) {
+        let conflictMsg = "There is already an active session on another device.";
+        try {
+          const conflictData = await res.json();
+          if (conflictData.message) {
+            conflictMsg = conflictData.message;
+          }
+        } catch {}
+        throw new SessionConflictError(conflictMsg);
+      }
+
+      if (!res.ok) {
+        const text = (await res.text()) || res.statusText;
+        throw new Error(`${res.status}: ${text}`);
+      }
+
       const data = await res.json();
       const sessionId = data.id || data.sessionId;
 
@@ -134,8 +167,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           endedAt: new Date().toISOString(),
           totalDurationSeconds: session.totalSecondsWatched,
         });
-      } catch (err: any) {
-        console.warn("Failed to end session on server:", err.message);
+      } catch (err: unknown) {
+        console.warn("Failed to end session on server:", err instanceof Error ? err.message : err);
       }
     }
     setSession((prev) => ({ ...prev, isActive: false }));

@@ -15,7 +15,7 @@ import { Feather } from "@expo/vector-icons";
 import type { ComponentProps } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { apiRequest } from "@/lib/query-client";
-import { useSession } from "@/contexts/SessionContext";
+import { useSession, SessionConflictError } from "@/contexts/SessionContext";
 import { colors, spacing, borderRadius } from "@/constants/colors";
 import type { Video, TaperMode, PlaylistResponse } from "@/lib/types";
 import { TAPER_MODES } from "@/lib/types";
@@ -385,25 +385,59 @@ export default function PlaylistPreviewScreen() {
     setPlaylist((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const doStartSession = async (force: boolean) => {
+    await startSession({
+      childIds,
+      childNames,
+      playlist,
+      calmingVideos: includeWindDown ? calmingVideos : [],
+      includeWindDown,
+      taperMode,
+      flatlineLevel,
+      sessionMinutes,
+      finishMode,
+      force,
+    });
+    router.push("/(main)/player");
+  };
+
   const handleStart = async () => {
     if (playlist.length === 0) return;
     setIsStarting(true);
     try {
-      await startSession({
-        childIds,
-        childNames,
-        playlist,
-        calmingVideos: includeWindDown ? calmingVideos : [],
-        includeWindDown,
-        taperMode,
-        flatlineLevel,
-        sessionMinutes,
-        finishMode,
-      });
-      router.push("/(main)/player");
+      await doStartSession(false);
     } catch (err: unknown) {
+      if (err instanceof SessionConflictError) {
+        Alert.alert(
+          "Active Session on Another Device",
+          "Starting this session will close the one currently running on the other device. Do you want to continue?",
+          [
+            {
+              text: "Cancel",
+              style: "cancel",
+              onPress: () => setIsStarting(false),
+            },
+            {
+              text: "Continue",
+              style: "destructive",
+              onPress: async () => {
+                try {
+                  await doStartSession(true);
+                } catch (retryErr: unknown) {
+                  Alert.alert(
+                    "Error",
+                    retryErr instanceof Error ? retryErr.message : "Failed to start session",
+                  );
+                } finally {
+                  setIsStarting(false);
+                }
+              },
+            },
+          ],
+        );
+        return;
+      }
       Alert.alert("Error", err instanceof Error ? err.message : "Failed to start session");
-    } finally {
       setIsStarting(false);
     }
   };
