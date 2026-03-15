@@ -17,6 +17,12 @@ import { useCast } from "@/contexts/CastContext";
 import { apiRequest } from "@/lib/query-client";
 import { colors, spacing, borderRadius } from "@/constants/colors";
 
+function extractYoutubeIdFromThumbnail(url: string | null): string | null {
+  if (!url) return null;
+  const match = url.match(/img\.youtube\.com\/vi\/([^/]+)/);
+  return match ? match[1] : null;
+}
+
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60);
@@ -48,10 +54,22 @@ export default function PlayerScreen() {
     }
   }, [session.isActive, session.playlist.length]);
 
-  const currentVideo =
+  const rawVideo =
     session.playlist.length > 0
       ? session.playlist[session.currentIndex]
       : null;
+
+  const currentVideo = rawVideo
+    ? {
+        ...rawVideo,
+        youtubeId:
+          rawVideo.youtubeId ||
+          (rawVideo as any).youtube_id ||
+          (rawVideo as any).youtube_video_id ||
+          extractYoutubeIdFromThumbnail(rawVideo.thumbnailUrl) ||
+          "",
+      }
+    : null;
 
   const sessionTotalSeconds = session.sessionMinutes * 60;
 
@@ -96,7 +114,7 @@ export default function PlayerScreen() {
 
   const handlePlayerError = useCallback(
     (error: string) => {
-      console.warn("[Player] YouTube error:", error, "videoId:", currentVideo?.youtubeId);
+      console.warn("[Player] YouTube error:", error, "videoId:", currentVideo?.youtubeId, "raw keys:", currentVideo ? Object.keys(currentVideo).join(",") : "null");
       Alert.alert(
         "Video Unavailable",
         `"${currentVideo?.title}" couldn't be played. Skipping to next video.`,
@@ -200,6 +218,7 @@ export default function PlayerScreen() {
               preventFullScreen: false,
               controls: true,
             }}
+            webViewStyle={{ opacity: 0.99 }}
             webViewProps={{
               allowsInlineMediaPlayback: true,
               mediaPlaybackRequiresUserAction: false,
