@@ -281,6 +281,7 @@ export default function PlaylistPreviewScreen() {
   const [isStarting, setIsStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const [debugLog, setDebugLog] = useState<string[]>([]);
+  const [forceNext, setForceNext] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [includeWindDown, setIncludeWindDown] = useState(
     params.includeWindDown === "1",
@@ -458,49 +459,29 @@ export default function PlaylistPreviewScreen() {
   };
 
   const handleStart = async () => {
-    addLog(`handleStart pressed, playlist=${playlist.length}`);
+    const useForce = forceNext;
+    addLog(`handleStart pressed, playlist=${playlist.length}, force=${useForce}`);
     if (playlist.length === 0) return;
     setIsStarting(true);
     setStartError(null);
+    setForceNext(false);
     try {
-      await doStartSession(false);
+      await doStartSession(useForce);
       addLog("success, resetting button");
       setIsStarting(false);
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      addLog(`caught: ${errMsg}`);
       const isConflict = err instanceof SessionConflictError ||
-        (err instanceof Error && err.name === "SessionConflictError");
+        (err instanceof Error && err.name === "SessionConflictError") ||
+        errMsg.includes("active session");
+      addLog(`caught (conflict=${isConflict}): ${errMsg}`);
       if (isConflict) {
         setIsStarting(false);
-        Alert.alert(
-          "Session Conflict",
-          `${errMsg}\n\nStarting this session will close the existing one. Continue?`,
-          [
-            { text: "Cancel", style: "cancel" },
-            {
-              text: "Continue",
-              style: "destructive",
-              onPress: async () => {
-                setIsStarting(true);
-                setStartError(null);
-                try {
-                  await doStartSession(true);
-                } catch (retryErr: unknown) {
-                  const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
-                  setStartError(retryMsg);
-                  Alert.alert("Error", retryMsg);
-                } finally {
-                  setIsStarting(false);
-                }
-              },
-            },
-          ],
-        );
+        setStartError(`Conflict: ${errMsg} — Tap "Start Watching" to force-start.`);
+        setForceNext(true);
         return;
       }
       setStartError(errMsg);
-      Alert.alert("Error", errMsg);
       setIsStarting(false);
     }
   };
