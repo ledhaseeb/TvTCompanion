@@ -8,12 +8,14 @@ import {
   StatusBar,
   Dimensions,
   ActivityIndicator,
+  Image,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import YoutubePlayer from "react-native-youtube-iframe";
 import { useSession } from "@/contexts/SessionContext";
 import { useCast } from "@/contexts/CastContext";
+import type { ReceiverMessage } from "@/contexts/CastContext";
 import { apiRequest } from "@/lib/query-client";
 import { colors, spacing, borderRadius } from "@/constants/colors";
 
@@ -36,8 +38,22 @@ export default function PlayerScreen() {
     advanceVideo,
     endSession,
     updateWatchTime,
+    setCurrentIndex,
   } = useSession();
-  const { isCasting, loadMedia, NativeCastButton } = useCast();
+  const {
+    isCasting,
+    isAvailable,
+    deviceName,
+    loadPlaylist,
+    skipVideo,
+    pauseMedia,
+    playMedia,
+    stopMedia,
+    requestSession,
+    endCastSession,
+    onReceiverMessage,
+    NativeCastButton,
+  } = useCast();
 
   const [playing, setPlaying] = useState(true);
   const [elapsed, setElapsed] = useState(0);
@@ -45,6 +61,7 @@ export default function PlayerScreen() {
   const watchStartRef = useRef(Date.now());
   const totalWatchedRef = useRef(0);
   const justAdvancedRef = useRef(false);
+  const castPlaylistSentRef = useRef(false);
 
   const { width: screenWidth } = Dimensions.get("window");
   const playerHeight = Math.round((screenWidth * 9) / 16);
@@ -96,10 +113,53 @@ export default function PlayerScreen() {
   }, [playing, session.finishMode, sessionTotalSeconds]);
 
   useEffect(() => {
-    if (currentVideo && isCasting) {
-      loadMedia(currentVideo.youtubeId, currentVideo.title);
+    if (isCasting && session.isActive && session.playlist.length > 0 && !castPlaylistSentRef.current) {
+      castPlaylistSentRef.current = true;
+      loadPlaylist(session.playlist, session.currentIndex);
     }
-  }, [currentVideo?.youtubeId, isCasting]);
+  }, [isCasting, session.isActive, session.playlist.length]);
+
+  useEffect(() => {
+    if (!isCasting) {
+      castPlaylistSentRef.current = false;
+    }
+  }, [isCasting]);
+
+  useEffect(() => {
+    if (!isCasting) return;
+
+    const unsubscribe = onReceiverMessage((msg: ReceiverMessage) => {
+      switch (msg.type) {
+        case "STATUS":
+          if ("isPlaying" in msg) {
+            setPlaying(msg.isPlaying);
+          }
+          if ("currentIndex" in msg && msg.currentIndex !== session.currentIndex) {
+            setCurrentIndex(msg.currentIndex);
+          }
+          break;
+
+        case "VIDEO_ENDED":
+          if ("index" in msg) {
+            recordWatchHistory();
+          }
+          break;
+
+        case "VIDEO_ERROR":
+          console.warn("[Cast] Video error on receiver:", msg);
+          break;
+
+        case "SESSION_COMPLETE":
+          handleSessionEnd();
+          break;
+
+        case "SESSION_STOPPED":
+          break;
+      }
+    });
+
+    return unsubscribe;
+  }, [isCasting, session.currentIndex]);
 
   const handleStateChange = useCallback(
     (state: string) => {
@@ -156,6 +216,9 @@ export default function PlayerScreen() {
 
   const handleSessionEnd = useCallback(async () => {
     await recordWatchHistory();
+    if (isCasting) {
+      try { await stopMedia(); } catch {}
+    }
     await endSession();
     router.replace({
       pathname: "/(main)/session-feedback" as any,
@@ -165,7 +228,7 @@ export default function PlayerScreen() {
         childNames: session.childNames.join(","),
       },
     });
-  }, [session.sessionId, session.childIds, session.childNames]);
+  }, [session.sessionId, session.childIds, session.childNames, isCasting, stopMedia]);
 
   const handleEndPress = () => {
     Alert.alert("End Session", "Are you sure you want to end this session?", [
@@ -176,7 +239,21 @@ export default function PlayerScreen() {
 
   const handleSkip = () => {
     recordWatchHistory();
-    advanceVideo();
+    if (isCasting) {
+      skipVideo();
+    } else {
+      advanceVideo();
+    }
+  };
+
+  const handleCastPlayPause = () => {
+    if (playing) {
+      pauseMedia();
+      setPlaying(false);
+    } else {
+      playMedia();
+      setPlaying(true);
+    }
   };
 
   useEffect(() => {
@@ -211,6 +288,11 @@ export default function PlayerScreen() {
   const remaining = Math.max(sessionTotalSeconds - elapsed, 0);
   const isOvertime = elapsed > sessionTotalSeconds;
 
+  const thumbnailUrl =
+    currentVideo.customThumbnailUrl ||
+    currentVideo.thumbnailUrl ||
+    `https://img.youtube.com/vi/${currentVideo.youtubeId}/hqdefault.jpg`;
+
   return (
     <View style={styles.container}>
       <StatusBar hidden />
@@ -242,10 +324,34 @@ export default function PlayerScreen() {
         )}
 
         {isCasting && (
-          <View style={[styles.castingPlaceholder, { height: playerHeight }]}>
-            <Feather name="cast" size={48} color={colors.white} />
-            <Text style={styles.castingText}>Casting to TV</Text>
-            <Text style={styles.castingTitle}>{currentVideo.title}</Text>
+          <View style={[styles.castingArea, { height: playerHeight }]}>
+            <Image
+              source={{ uri: thumbnailUrl }}
+              style={styles.castThumbnail}
+              resizeMode="cover"
+            />
+            <View style={styles.castOverlay}>
+              <Feather name="cast" size={40} color="#2dd4a8" />
+              <Text style={styles.castDeviceName}>
+                Casting to {deviceName || "Chromecast"}
+              </Text>
+              <Text style={styles.castVideoTitle} numberOfLines={2}>
+                {currentVideo.title}
+              </Text>
+
+              <View style={styles.castControls}>
+                <TouchableOpacity
+                  onPress={handleCastPlayPause}
+                  style={styles.castControlBtn}
+                >
+                  <Feather
+                    name={playing ? "pause" : "play"}
+                    size={28}
+                    color={colors.white}
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
         )}
       </View>
@@ -286,11 +392,20 @@ export default function PlayerScreen() {
           <Feather name="skip-forward" size={20} color={colors.white} />
         </TouchableOpacity>
 
-        {NativeCastButton && (
+        {isAvailable && NativeCastButton && (
           <NativeCastButton
             style={{ width: 32, height: 32 }}
             tintColor={colors.white}
           />
+        )}
+
+        {isAvailable && !NativeCastButton && (
+          <TouchableOpacity
+            onPress={requestSession}
+            style={styles.controlBtn}
+          >
+            <Feather name="cast" size={20} color={isCasting ? "#2dd4a8" : colors.white} />
+          </TouchableOpacity>
         )}
       </View>
 
@@ -352,22 +467,52 @@ const styles = StyleSheet.create({
     backgroundColor: colors.black,
     justifyContent: "center",
   },
-  castingPlaceholder: {
+  castingArea: {
+    backgroundColor: "#0f1923",
     justifyContent: "center",
     alignItems: "center",
-    gap: spacing.sm,
+    overflow: "hidden",
   },
-  castingText: {
-    color: colors.textTertiary,
+  castThumbnail: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0.3,
+  },
+  castOverlay: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingHorizontal: spacing.xl,
+  },
+  castDeviceName: {
+    color: "#2dd4a8",
     fontSize: 14,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Inter_600SemiBold",
+    marginTop: 8,
   },
-  castingTitle: {
+  castVideoTitle: {
     color: colors.white,
     fontSize: 16,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Inter_500Medium",
     textAlign: "center",
-    paddingHorizontal: spacing.xl,
+    marginTop: 4,
+  },
+  castControls: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.lg,
+    marginTop: 16,
+  },
+  castControlBtn: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   controlBar: {
     flexDirection: "row",

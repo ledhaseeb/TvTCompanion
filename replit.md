@@ -84,7 +84,7 @@ Expo React Native companion app for SafeWatch — manages children's screen time
 - **Navigation**: expo-router with stack navigation (no tabs)
 - **Screens**: Login → Start Viewing Session (combined child selection + session config) → Playlist Preview → Player → Feedback
 - **YouTube**: react-native-youtube-iframe for embedded playback
-- **Chromecast**: Stubbed CastContext (requires dev client build for real Chromecast)
+- **Chromecast**: Full Chromecast integration via `react-native-google-cast` with custom receiver. In Expo Go, cast features gracefully degrade (hidden). In a development/production build, the Cast button appears when a Chromecast is on the network. The custom receiver (`public/cast-receiver.html` on api-server) plays YouTube playlists fullscreen on the TV via IFrame API with auto-advance. Communication uses custom Cast namespace `urn:x-cast:com.safewatch.cast`.
 - **State**: React Context (AuthContext, SessionContext, CastContext) + React Query
 
 #### Key Files
@@ -100,6 +100,7 @@ Expo React Native companion app for SafeWatch — manages children's screen time
 - `lib/query-client.ts` — React Query client with auth header injection
 - `contexts/AuthContext.tsx` — Auth state provider
 - `contexts/SessionContext.tsx` — Active session state provider
+- `contexts/CastContext.tsx` — Chromecast integration (react-native-google-cast with Expo Go fallback)
 
 #### Environment Variables (Mobile)
 
@@ -107,6 +108,7 @@ Expo React Native companion app for SafeWatch — manages children's screen time
 - `EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN` — Firebase auth domain
 - `EXPO_PUBLIC_FIREBASE_PROJECT_ID` — Firebase project ID
 - `EXPO_PUBLIC_DOMAIN` — auto-set to `REPLIT_DEV_DOMAIN` for API calls
+- `EXPO_PUBLIC_CAST_APP_ID` — Google Cast Developer Console App ID for custom Chromecast receiver (set to registered receiver ID)
 
 #### Environment Variables (Backend)
 
