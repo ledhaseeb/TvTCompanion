@@ -194,6 +194,8 @@ export default function PlayerScreen() {
             videoId={currentVideo.youtubeId}
             onChangeState={handleStateChange}
             onError={handlePlayerError}
+            useLocalHTML={true}
+            baseUrlOverride="https://www.youtube.com"
             initialPlayerParams={{
               modestbranding: true,
               rel: false,
@@ -203,6 +205,9 @@ export default function PlayerScreen() {
             webViewProps={{
               allowsInlineMediaPlayback: true,
               mediaPlaybackRequiresUserAction: false,
+              allowsFullscreenVideo: true,
+              javaScriptEnabled: true,
+              domStorageEnabled: true,
             }}
           />
         )}
