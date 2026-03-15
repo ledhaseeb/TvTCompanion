@@ -280,6 +280,7 @@ export default function PlaylistPreviewScreen() {
   const [isShuffling, setIsShuffling] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
+  const [debugLog, setDebugLog] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [includeWindDown, setIncludeWindDown] = useState(
     params.includeWindDown === "1",
@@ -424,32 +425,50 @@ export default function PlaylistPreviewScreen() {
     setPlaylist((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const addLog = (msg: string) => {
+    const ts = new Date().toLocaleTimeString();
+    setDebugLog((prev) => [...prev.slice(-9), `${ts} ${msg}`]);
+    console.log("[PlaylistPreview]", msg);
+  };
+
   const doStartSession = async (force: boolean) => {
-    await startSession({
-      childIds,
-      childNames,
-      playlist,
-      calmingVideos: includeWindDown ? calmingVideos : [],
-      includeWindDown,
-      taperMode,
-      flatlineLevel,
-      sessionMinutes,
-      finishMode,
-      force,
-    });
-    router.push("/(main)/player");
+    addLog(`startSession(force=${force})...`);
+    try {
+      const sid = await startSession({
+        childIds,
+        childNames,
+        playlist,
+        calmingVideos: includeWindDown ? calmingVideos : [],
+        includeWindDown,
+        taperMode,
+        flatlineLevel,
+        sessionMinutes,
+        finishMode,
+        force,
+      });
+      addLog(`session created: ${sid}`);
+      addLog("navigating to player...");
+      router.push("/(main)/player");
+      addLog("router.push called");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      addLog(`ERROR in doStartSession: ${msg}`);
+      throw e;
+    }
   };
 
   const handleStart = async () => {
+    addLog(`handleStart pressed, playlist=${playlist.length}`);
     if (playlist.length === 0) return;
     setIsStarting(true);
     setStartError(null);
     try {
       await doStartSession(false);
+      addLog("success, resetting button");
       setIsStarting(false);
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      console.log("[handleStart] caught error:", errMsg);
+      addLog(`caught: ${errMsg}`);
       const isConflict = err instanceof SessionConflictError ||
         (err instanceof Error && err.name === "SessionConflictError");
       if (isConflict) {
@@ -683,6 +702,13 @@ export default function PlaylistPreviewScreen() {
       <View
         style={[styles.footer, { paddingBottom: insets.bottom + spacing.sm }]}
       >
+        {debugLog.length > 0 && (
+          <View style={{ backgroundColor: "#1e1e2e", borderRadius: 8, padding: 8, marginBottom: 8, maxHeight: 120 }}>
+            {debugLog.map((line, i) => (
+              <Text key={i} style={{ color: "#94a3b8", fontSize: 10, fontFamily: "Inter_400Regular" }}>{line}</Text>
+            ))}
+          </View>
+        )}
         {startError && (
           <Text style={{ color: "#ef4444", fontSize: 12, fontFamily: "Inter_500Medium", textAlign: "center", marginBottom: 8 }}>
             {startError}
