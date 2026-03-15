@@ -210,7 +210,6 @@ export default function PlayerScreen() {
       <View style={styles.playerArea}>
         {!isCasting && (
           <YoutubePlayer
-            key={currentVideo.youtubeId}
             height={playerHeight}
             width={screenWidth}
             play={playing}
