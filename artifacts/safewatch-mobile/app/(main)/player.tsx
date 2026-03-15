@@ -115,7 +115,7 @@ export default function PlayerScreen() {
 
   const handlePlayerError = useCallback(
     (error: string) => {
-      console.warn("[Player] YouTube error:", error, "videoId:", currentVideo?.youtubeId, "raw keys:", currentVideo ? Object.keys(currentVideo).join(",") : "null");
+      console.warn("[Player] YouTube error:", error, "videoId:", currentVideo?.youtubeId);
       Alert.alert(
         "Video Unavailable",
         `"${currentVideo?.title}" couldn't be played. Skipping to next video.`,
