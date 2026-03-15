@@ -444,21 +444,24 @@ export default function PlaylistPreviewScreen() {
     setIsStarting(true);
     try {
       await doStartSession(false);
+      setIsStarting(false);
     } catch (err: unknown) {
-      if (err instanceof SessionConflictError) {
+      console.log("[handleStart] caught error:", err);
+      const isConflict = err instanceof SessionConflictError ||
+        (err instanceof Error && err.name === "SessionConflictError");
+      if (isConflict) {
+        const conflictMsg = err instanceof Error ? err.message : "Active session conflict";
+        setIsStarting(false);
         Alert.alert(
           "Session Conflict",
-          `${err.message}\n\nStarting this session will close the existing one. Continue?`,
+          `${conflictMsg}\n\nStarting this session will close the existing one. Continue?`,
           [
-            {
-              text: "Cancel",
-              style: "cancel",
-              onPress: () => setIsStarting(false),
-            },
+            { text: "Cancel", style: "cancel" },
             {
               text: "Continue",
               style: "destructive",
               onPress: async () => {
+                setIsStarting(true);
                 try {
                   await doStartSession(true);
                 } catch (retryErr: unknown) {
@@ -475,9 +478,8 @@ export default function PlaylistPreviewScreen() {
         );
         return;
       }
-      console.error("Start session error:", err);
+      console.error("[handleStart] Start session error:", err);
       Alert.alert("Error", err instanceof Error ? err.message : "Failed to start session");
-    } finally {
       setIsStarting(false);
     }
   };

@@ -112,25 +112,32 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         body.force = true;
       }
 
+      console.log("[Session] Starting session, force:", params.force);
       const res = await apiRequestRaw("POST", "/api/sessions", body);
+      console.log("[Session] Response status:", res.status);
 
       if (res.status === 409) {
         let conflictMsg = "There is already an active session on another device.";
         try {
           const conflictData = await res.json();
+          console.log("[Session] 409 conflict data:", JSON.stringify(conflictData));
           if (conflictData.message) {
             conflictMsg = conflictData.message;
           }
-        } catch {}
+        } catch (parseErr) {
+          console.error("[Session] Failed to parse 409 body:", parseErr);
+        }
         throw new SessionConflictError(conflictMsg);
       }
 
       if (!res.ok) {
         const text = (await res.text()) || res.statusText;
+        console.error("[Session] Non-OK response:", res.status, text);
         throw new Error(`${res.status}: ${text}`);
       }
 
       const data = await res.json();
+      console.log("[Session] Session created:", JSON.stringify(data));
       const sessionId = data.id || data.sessionId;
 
       if (!sessionId) {
