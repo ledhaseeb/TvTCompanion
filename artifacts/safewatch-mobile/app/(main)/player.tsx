@@ -234,7 +234,18 @@ export default function PlayerScreen() {
   };
 
   const handleSessionEnd = useCallback(async () => {
-    await recordWatchHistory();
+    const curVideo = session.playlist[session.currentIndex];
+    if (curVideo && session.sessionId) {
+      try {
+        await apiRequest("POST", "/api/watch-history", {
+          videoId: curVideo.youtubeId || extractYoutubeIdFromThumbnail(curVideo.thumbnailUrl) || "",
+          childIds: session.childIds,
+          sessionId: session.sessionId,
+          durationSeconds: curVideo.durationSeconds,
+          stimulationLevel: curVideo.stimulationLevel,
+        });
+      } catch {}
+    }
     if (isCasting) {
       try { await stopMedia(); } catch {}
     }
@@ -248,7 +259,7 @@ export default function PlayerScreen() {
         childNames: session.childNames.join(","),
       },
     });
-  }, [session.sessionId, session.childIds, session.childNames, isCasting, stopMedia]);
+  }, [session.sessionId, session.childIds, session.childNames, session.playlist, session.currentIndex, isCasting, stopMedia, endSession, router]);
 
   const handleEndPress = () => {
     Alert.alert("End Session", "Are you sure you want to end this session?", [
@@ -321,6 +332,7 @@ export default function PlayerScreen() {
       <View style={styles.playerArea}>
         {!isCasting && (
           <YoutubePlayer
+            key={currentVideo.youtubeId}
             height={playerHeight}
             width={screenWidth}
             play={playing}
