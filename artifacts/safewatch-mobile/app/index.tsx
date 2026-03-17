@@ -13,9 +13,25 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "@/contexts/AuthContext";
 import { signInWithEmail, signUpWithEmail, signInWithGoogle } from "@/lib/auth";
-import { colors, spacing, borderRadius } from "@/constants/colors";
+import { spacing, borderRadius } from "@/constants/colors";
+
+const DARK = {
+  bg: "#0f1923",
+  card: "#1a2a3a",
+  border: "#2a3a4a",
+  accent: "#2dd4a8",
+  accentDim: "#1a6b5a",
+  text: "#f1f5f9",
+  textSecondary: "#94a3b8",
+  textMuted: "#64748b",
+  error: "#f87171",
+  errorBg: "rgba(248,113,113,0.12)",
+  errorBorder: "rgba(248,113,113,0.3)",
+  google: "#ffffff",
+};
 
 export default function LoginScreen() {
   const { user, isLoading, login } = useAuth();
@@ -44,11 +60,11 @@ export default function LoginScreen() {
       <View style={[styles.loadingContainer, { paddingTop: insets.top }]}>
         <View style={styles.logoContainer}>
           <View style={styles.logoIcon}>
-            <Feather name="shield" size={32} color={colors.white} />
+            <Feather name="shield" size={32} color={DARK.bg} />
           </View>
           <Text style={styles.logoText}>SafeWatch</Text>
         </View>
-        <ActivityIndicator size="large" color={colors.primary} />
+        <ActivityIndicator size="large" color={DARK.accent} />
       </View>
     );
   }
@@ -128,9 +144,9 @@ export default function LoginScreen() {
       >
         <View style={styles.headerSection}>
           <View style={styles.logoIcon}>
-            <Feather name="shield" size={36} color={colors.white} />
+            <Feather name="shield" size={36} color={DARK.bg} />
           </View>
-          <Text style={styles.appName}>SafeWatch</Text>
+          <Text style={styles.appName}>KidSafeTV</Text>
           <Text style={styles.tagline}>Screen time, thoughtfully managed</Text>
         </View>
 
@@ -141,7 +157,7 @@ export default function LoginScreen() {
 
           {error && (
             <View style={styles.errorBanner}>
-              <Feather name="alert-circle" size={16} color={colors.error} />
+              <Feather name="alert-circle" size={16} color={DARK.error} />
               <Text style={styles.errorText}>{error}</Text>
             </View>
           )}
@@ -150,13 +166,13 @@ export default function LoginScreen() {
             <Feather
               name="mail"
               size={18}
-              color={colors.textTertiary}
+              color={DARK.textMuted}
               style={styles.inputIcon}
             />
             <TextInput
               style={styles.input}
               placeholder="Email address"
-              placeholderTextColor={colors.textTertiary}
+              placeholderTextColor={DARK.textMuted}
               value={email}
               onChangeText={setEmail}
               autoCapitalize="none"
@@ -170,13 +186,13 @@ export default function LoginScreen() {
             <Feather
               name="lock"
               size={18}
-              color={colors.textTertiary}
+              color={DARK.textMuted}
               style={styles.inputIcon}
             />
             <TextInput
               style={[styles.input, { flex: 1 }]}
               placeholder="Password"
-              placeholderTextColor={colors.textTertiary}
+              placeholderTextColor={DARK.textMuted}
               value={password}
               onChangeText={setPassword}
               secureTextEntry={!showPassword}
@@ -190,7 +206,7 @@ export default function LoginScreen() {
               <Feather
                 name={showPassword ? "eye-off" : "eye"}
                 size={18}
-                color={colors.textTertiary}
+                color={DARK.textMuted}
               />
             </TouchableOpacity>
           </View>
@@ -202,13 +218,20 @@ export default function LoginScreen() {
             activeOpacity={0.8}
             testID="button-auth"
           >
-            {submitting ? (
-              <ActivityIndicator color={colors.white} size="small" />
-            ) : (
-              <Text style={styles.primaryButtonText}>
-                {isSignUp ? "Create Account" : "Sign In"}
-              </Text>
-            )}
+            <LinearGradient
+              colors={[DARK.accent, "#20b090"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.gradientButton}
+            >
+              {submitting ? (
+                <ActivityIndicator color={DARK.bg} size="small" />
+              ) : (
+                <Text style={styles.primaryButtonText}>
+                  {isSignUp ? "Create Account" : "Sign In"}
+                </Text>
+              )}
+            </LinearGradient>
           </TouchableOpacity>
 
           <View style={styles.dividerRow}>
@@ -254,13 +277,13 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: DARK.bg,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: colors.background,
+    backgroundColor: DARK.bg,
     gap: 24,
   },
   logoContainer: {
@@ -279,31 +302,31 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 20,
-    backgroundColor: colors.primary,
+    backgroundColor: DARK.accent,
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 16,
-    shadowColor: colors.primary,
+    shadowColor: DARK.accent,
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.4,
     shadowRadius: 16,
     elevation: 8,
   },
   logoText: {
     fontSize: 22,
     fontFamily: "Inter_700Bold",
-    color: colors.text,
+    color: DARK.text,
   },
   appName: {
     fontSize: 28,
     fontFamily: "Inter_700Bold",
-    color: colors.text,
+    color: DARK.text,
     marginBottom: 4,
   },
   tagline: {
     fontSize: 15,
     fontFamily: "Inter_400Regular",
-    color: colors.textSecondary,
+    color: DARK.textSecondary,
   },
   formSection: {
     gap: 14,
@@ -312,21 +335,21 @@ const styles = StyleSheet.create({
   formTitle: {
     fontSize: 22,
     fontFamily: "Inter_700Bold",
-    color: colors.text,
+    color: DARK.text,
     marginBottom: 4,
   },
   errorBanner: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: "#fef2f2",
+    backgroundColor: DARK.errorBg,
     borderRadius: borderRadius.md,
     padding: 12,
     borderWidth: 1,
-    borderColor: "#fecaca",
+    borderColor: DARK.errorBorder,
   },
   errorText: {
-    color: colors.error,
+    color: DARK.error,
     fontSize: 14,
     fontFamily: "Inter_400Regular",
     flex: 1,
@@ -334,10 +357,10 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: colors.surface,
+    backgroundColor: DARK.card,
     borderRadius: borderRadius.md,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: DARK.border,
     paddingHorizontal: 14,
     height: 52,
   },
@@ -348,29 +371,32 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     fontFamily: "Inter_400Regular",
-    color: colors.text,
+    color: DARK.text,
     height: "100%",
   },
   eyeButton: {
     padding: 4,
   },
   primaryButton: {
-    backgroundColor: colors.primary,
     borderRadius: borderRadius.md,
-    paddingVertical: 16,
-    alignItems: "center",
     marginTop: 4,
-    shadowColor: colors.primary,
+    overflow: "hidden",
+    shadowColor: DARK.accent,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 4,
+  },
+  gradientButton: {
+    paddingVertical: 16,
+    alignItems: "center",
+    borderRadius: borderRadius.md,
   },
   buttonDisabled: {
     opacity: 0.6,
   },
   primaryButtonText: {
-    color: colors.white,
+    color: DARK.bg,
     fontSize: 17,
     fontFamily: "Inter_600SemiBold",
   },
@@ -383,23 +409,23 @@ const styles = StyleSheet.create({
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: colors.border,
+    backgroundColor: DARK.border,
   },
   dividerText: {
     fontSize: 13,
     fontFamily: "Inter_400Regular",
-    color: colors.textTertiary,
+    color: DARK.textMuted,
   },
   googleButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 10,
-    backgroundColor: colors.white,
+    backgroundColor: DARK.card,
     borderRadius: borderRadius.md,
     paddingVertical: 14,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: DARK.border,
   },
   googleG: {
     fontSize: 20,
@@ -409,20 +435,20 @@ const styles = StyleSheet.create({
   googleButtonText: {
     fontSize: 16,
     fontFamily: "Inter_500Medium",
-    color: colors.text,
+    color: DARK.text,
   },
   switchButton: {
     alignItems: "center",
     paddingVertical: 8,
   },
   switchText: {
-    color: colors.primary,
+    color: DARK.accent,
     fontSize: 14,
     fontFamily: "Inter_500Medium",
   },
   footerText: {
     textAlign: "center",
-    color: colors.textTertiary,
+    color: DARK.textMuted,
     fontSize: 13,
     fontFamily: "Inter_400Regular",
     marginTop: "auto",
