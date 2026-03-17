@@ -4,8 +4,13 @@ import { fileURLToPath } from "url";
 import cors from "cors";
 import router from "./routes";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const currentDir = (() => {
+  try {
+    return path.dirname(fileURLToPath(import.meta.url));
+  } catch {
+    return typeof __dirname !== "undefined" ? __dirname : process.cwd();
+  }
+})();
 
 const app: Express = express();
 
@@ -13,7 +18,8 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-app.use(express.static(path.join(__dirname, "..", "public")));
+const publicDir = path.resolve(currentDir, "..", "public");
+app.use(express.static(publicDir));
 
 app.use("/api", router);
 
