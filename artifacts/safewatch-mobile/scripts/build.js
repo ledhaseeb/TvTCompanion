@@ -4,6 +4,15 @@ const { spawn } = require("child_process");
 const { Readable } = require("stream");
 const { pipeline } = require("stream/promises");
 
+if (process.env.NODE_ENV === "production" || process.env.CI === "true") {
+  const staticDir = path.resolve(__dirname, "..", "static-build");
+  if (!fs.existsSync(staticDir)) {
+    fs.mkdirSync(staticDir, { recursive: true });
+  }
+  console.log("Mobile app build skipped in production (distributed via EAS).");
+  process.exit(0);
+}
+
 let metroProcess = null;
 
 const projectRoot = path.resolve(__dirname, "..");
