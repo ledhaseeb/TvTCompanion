@@ -427,17 +427,16 @@ export default function PlayerScreen() {
           <Feather name="skip-forward" size={20} color={colors.white} />
         </TouchableOpacity>
 
-        {isAvailable && NativeCastButton && (
+        {NativeCastButton ? (
           <NativeCastButton
             style={{ width: 32, height: 32 }}
-            tintColor={colors.white}
+            tintColor={isCasting ? "#2dd4a8" : colors.white}
           />
-        )}
-
-        {isAvailable && !NativeCastButton && (
+        ) : (
           <TouchableOpacity
             onPress={requestSession}
-            style={styles.controlBtn}
+            style={[styles.controlBtn, !isAvailable && { opacity: 0.3 }]}
+            disabled={!isAvailable}
           >
             <Feather name="cast" size={20} color={isCasting ? "#2dd4a8" : colors.white} />
           </TouchableOpacity>
