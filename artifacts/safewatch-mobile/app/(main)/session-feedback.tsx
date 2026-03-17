@@ -137,7 +137,7 @@ export default function SessionFeedbackScreen() {
     <View
       style={[
         styles.container,
-        { paddingTop: insets.top + 16, paddingBottom: insets.bottom + spacing.md },
+        { paddingTop: insets.top + 36, paddingBottom: insets.bottom + spacing.md },
       ]}
     >
       <View style={styles.header}>
