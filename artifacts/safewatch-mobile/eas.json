@@ -9,16 +9,40 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://6a243442-567b-4fb8-ab44-694c37769f1a-00-768y93upv615.janeway.replit.dev",
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyBJY4oWuqCCWv73Q3UIF4aLhVWwbZvn9Lk",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "tvtantrum-yt-app.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "tvtantrum-yt-app",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "696904036193-ao086i0ovmpdc45clrqq76m0121hi57r.apps.googleusercontent.com",
+        "EXPO_PUBLIC_CAST_APP_ID": "0F5E0B59"
       }
     },
     "preview": {
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://6a243442-567b-4fb8-ab44-694c37769f1a-00-768y93upv615.janeway.replit.dev",
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyBJY4oWuqCCWv73Q3UIF4aLhVWwbZvn9Lk",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "tvtantrum-yt-app.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "tvtantrum-yt-app",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "696904036193-ao086i0ovmpdc45clrqq76m0121hi57r.apps.googleusercontent.com",
+        "EXPO_PUBLIC_CAST_APP_ID": "0F5E0B59"
       }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://6a243442-567b-4fb8-ab44-694c37769f1a-00-768y93upv615.janeway.replit.dev",
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyBJY4oWuqCCWv73Q3UIF4aLhVWwbZvn9Lk",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "tvtantrum-yt-app.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "tvtantrum-yt-app",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "696904036193-ao086i0ovmpdc45clrqq76m0121hi57r.apps.googleusercontent.com",
+        "EXPO_PUBLIC_CAST_APP_ID": "0F5E0B59"
+      }
     }
   },
   "submit": {
