@@ -1,0 +1,32 @@
+Checking the license for package Android SDK Build-Tools 36 in /home/expo/Android/Sdk/licenses
+License for package Android SDK Build-Tools 36 accepted.
+Preparing "Install Android SDK Build-Tools 36 v.36.0.0".
+"Install Android SDK Build-Tools 36 v.36.0.0" ready.
+Installing Android SDK Build-Tools 36 in /home/expo/Android/Sdk/build-tools/36.0.0
+"Install Android SDK Build-Tools 36 v.36.0.0" complete.
+"Install Android SDK Build-Tools 36 v.36.0.0" finished.
+[=======================================] 100% Fetch remote repository...       
+[Incubating] Problems report is available at: file:///home/expo/workingdir/build/artifacts/safewatch-mobile/android/build/reports/problems/problems-report.html
+FAILURE: Build failed with an exception.
+* What went wrong:
+Could not determine the dependencies of task ':app:processDebugResources'.
+> Could not resolve all dependencies for configuration ':app:debugRuntimeClasspath'.
+   > Could not resolve com.google.android.gms:play-services-cast-framework:+.
+     Required by:
+         project :app
+         project :app > project :react-native-google-cast
+      > Failed to list versions for com.google.android.gms:play-services-cast-framework.
+         > Unable to load Maven meta-data from https://central.sonatype.com/repository/maven-snapshots/com/google/android/gms/play-services-cast-framework/maven-metadata.xml.
+            > Could not GET 'https://central.sonatype.com/repository/maven-snapshots/com/google/android/gms/play-services-cast-framework/maven-metadata.xml'.
+               > Read timed out
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+BUILD FAILED in 3m 8s
+28 actionable tasks: 28 executed
+Error: Gradle build failed with unknown error. See logs for the "Run gradlew" phase for more information.

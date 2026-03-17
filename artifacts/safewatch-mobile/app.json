@@ -38,7 +38,8 @@
           "iosReceiverAppId": "0F5E0B59",
           "androidReceiverAppId": "0F5E0B59"
         }
-      ]
+      ],
+      "./plugins/withCastFrameworkVersion"
     ],
     "experiments": {
       "typedRoutes": true,
