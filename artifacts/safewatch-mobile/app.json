@@ -14,9 +14,12 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "bundleIdentifier": "com.safewatch.mobile"
     },
-    "android": {},
+    "android": {
+      "package": "com.safewatch.mobile"
+    },
     "web": {
       "favicon": "./assets/images/icon.png"
     },
@@ -32,8 +35,8 @@
       [
         "react-native-google-cast",
         {
-          "iosReceiverAppId": "SAFEWATCH",
-          "androidReceiverAppId": "SAFEWATCH"
+          "iosReceiverAppId": "0F5E0B59",
+          "androidReceiverAppId": "0F5E0B59"
         }
       ]
     ],
