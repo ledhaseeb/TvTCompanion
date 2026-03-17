@@ -62,7 +62,7 @@ export default function LoginScreen() {
           <View style={styles.logoIcon}>
             <Feather name="shield" size={32} color={DARK.bg} />
           </View>
-          <Text style={styles.logoText}>SafeWatch</Text>
+          <Text style={styles.logoText}>KidSafeTV</Text>
         </View>
         <ActivityIndicator size="large" color={DARK.accent} />
       </View>
@@ -267,7 +267,7 @@ export default function LoginScreen() {
         </View>
 
         <Text style={styles.footerText}>
-          Companion app for SafeWatch parents & caregivers
+          Companion app for KidSafeTV parents & caregivers
         </Text>
       </ScrollView>
     </KeyboardAvoidingView>
