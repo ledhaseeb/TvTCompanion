@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import YoutubePlayer from "react-native-youtube-iframe";
 import { useSession } from "@/contexts/SessionContext";
 import { useCast } from "@/contexts/CastContext";
@@ -35,6 +36,7 @@ const FEEDBACK_PATH = "/(main)/session-feedback";
 
 export default function PlayerScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const {
     session,
     advanceVideo,
@@ -326,7 +328,7 @@ export default function PlayerScreen() {
     `https://img.youtube.com/vi/${currentVideo.youtubeId}/hqdefault.jpg`;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar hidden />
       <View style={styles.centeredContent}>
       <View style={styles.playerArea}>
