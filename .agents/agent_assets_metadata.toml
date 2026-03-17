@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "85-4YI4m_pRGEAsHuIFGv"
+uri = "file://artifacts/safewatch-mobile/LOCAL_SETUP.md"
+type = "text"
+title = "Local Setup Guide — EAS Android Build"
