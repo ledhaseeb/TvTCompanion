@@ -1,0 +1,124 @@
+026-03-18 10:42:21.91
+451d2d8d
+User
+Server listening on port 8080
+2026-03-18 10:42:22.70
+451d2d8d
+System
+artifact port detected expected=2 port=22794 detected=2
+2026-03-18 10:42:22.70
+451d2d8d
+System
+all artifact ports detected
+2026-03-18 10:42:22.70
+451d2d8d
+System
+artifact processes running, waiting for signal or process exit
+2026-03-18 10:42:22.71
+451d2d8d
+User
+Serving static Expo build on port 22794
+2026-03-18 10:57:59.61
+a0e34d57
+System
+starting up user application
+2026-03-18 10:57:59.61
+a0e34d57
+System
+artifact mode enabled static=0 runnable=2
+2026-03-18 10:57:59.61
+a0e34d57
+System
+metasidecar: loaded enterprise status from environment is_enterprise=false
+2026-03-18 10:57:59.61
+a0e34d57
+System
+starting artifact processes for monorepo deployment
+2026-03-18 10:57:59.61
+a0e34d57
+System
+forwarding local port 0 to external port 80 (mapped as 1104)
+2026-03-18 10:57:59.61
+a0e34d57
+System
+waiting for runnable artifact ports ports=[22794 8080]
+2026-03-18 10:57:59.62
+a0e34d57
+System
+starting artifact processes count=2
+2026-03-18 10:57:59.62
+a0e34d57
+System
+starting artifact process artifact=artifacts/api-server args=[node artifacts/api-server/dist/index.cjs] port=8080
+2026-03-18 10:57:59.62
+a0e34d57
+System
+starting artifact process artifact=artifacts/safewatch-mobile args=[pnpm --filter @workspace/safewatch-mobile run serve] port=22794
+2026-03-18 10:58:00.37
+a0e34d57
+System
+artifact process started artifact=artifacts/api-server pid=18
+2026-03-18 10:58:00.37
+a0e34d57
+System
+artifact process started pid=19 artifact=artifacts/safewatch-mobile
+2026-03-18 10:58:02.19
+451d2d8d
+System
+received signal, shutting down artifact processes signal=terminated
+2026-03-18 10:58:02.19
+451d2d8d
+System
+sending SIGTERM to artifact process artifact=artifacts/api-server
+2026-03-18 10:58:02.19
+451d2d8d
+System
+sending SIGTERM to artifact process artifact=artifacts/safewatch-mobile
+2026-03-18 10:58:02.21
+451d2d8d
+System
+artifact process exited with error error=signal: terminated artifact=artifacts/api-server
+2026-03-18 10:58:02.46
+451d2d8d
+User
+Command failed with signal "SIGTERM"
+2026-03-18 10:58:02.46
+451d2d8d
+User
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @workspace/safewatch-mobile@0.0.0 serve: `node server/serve.js`
+2026-03-18 10:58:02.46
+451d2d8d
+User
+/home/runner/workspace/artifacts/safewatch-mobile:
+2026-03-18 10:58:08.32
+a0e34d57
+User
+> node server/serve.js
+2026-03-18 10:58:08.32
+a0e34d57
+User
+> @workspace/safewatch-mobile@0.0.0 serve /home/runner/workspace/artifacts/safewatch-mobile
+2026-03-18 10:58:08.97
+a0e34d57
+System
+artifact port detected port=8080 detected=1 expected=2
+2026-03-18 10:58:08.97
+a0e34d57
+User
+Server listening on port 8080
+2026-03-18 10:58:08.97
+a0e34d57
+System
+artifact port detected port=22794 detected=2 expected=2
+2026-03-18 10:58:08.97
+a0e34d57
+System
+all artifact ports detected
+2026-03-18 10:58:08.97
+a0e34d57
+System
+artifact processes running, waiting for signal or process exit
+2026-03-18 10:58:08.98
+a0e34d57
+User
+Serving static Expo build on port 22794
