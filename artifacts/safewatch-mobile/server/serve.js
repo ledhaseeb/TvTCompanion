@@ -115,6 +115,29 @@ const server = http.createServer((req, res) => {
     pathname = pathname.slice(basePath.length) || "/";
   }
 
+  if (pathname.startsWith("/api")) {
+    const apiPort = process.env.API_PORT || "8080";
+    const proxyReq = http.request(
+      {
+        hostname: "127.0.0.1",
+        port: parseInt(apiPort, 10),
+        path: req.url,
+        method: req.method,
+        headers: req.headers,
+      },
+      (proxyRes) => {
+        res.writeHead(proxyRes.statusCode || 502, proxyRes.headers);
+        proxyRes.pipe(res, { end: true });
+      },
+    );
+    proxyReq.on("error", () => {
+      res.writeHead(502, { "content-type": "application/json" });
+      res.end(JSON.stringify({ error: "API server unavailable" }));
+    });
+    req.pipe(proxyReq, { end: true });
+    return;
+  }
+
   if (pathname === "/" || pathname === "/manifest") {
     const platform = req.headers["expo-platform"];
     if (platform === "ios" || platform === "android") {
