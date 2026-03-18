@@ -116,8 +116,10 @@ export default function PlayerScreen() {
   }, [playing, session.finishMode, sessionTotalSeconds, isCasting]);
 
   useEffect(() => {
+    console.log("[Player] Cast effect check - isCasting:", isCasting, "isActive:", session.isActive, "playlistLen:", session.playlist.length, "alreadySent:", castPlaylistSentRef.current);
     if (isCasting && session.isActive && session.playlist.length > 0 && !castPlaylistSentRef.current) {
       castPlaylistSentRef.current = true;
+      console.log("[Player] Sending playlist to Cast receiver, videos:", session.playlist.length, "startIndex:", session.currentIndex);
       loadPlaylist(session.playlist, session.currentIndex);
     }
   }, [isCasting, session.isActive, session.playlist.length]);

@@ -167,21 +167,41 @@ export function CastProvider({ children }: { children: ReactNode }) {
     let channelMessageListener: Subscription | undefined;
 
     const setupSession = (session: CastSession) => {
+      console.log("[Cast] setupSession called, device:", session.device?.friendlyName);
       setIsCasting(true);
       setIsConnecting(false);
       setDeviceName(session.device?.friendlyName || "Chromecast");
 
-      const channel = session.addChannel(NAMESPACE);
-      channelRef.current = channel;
-      channelReadyRef.current = true;
+      try {
+        const channel = session.addChannel(NAMESPACE);
+        channelRef.current = channel;
+        channelReadyRef.current = true;
+        console.log("[Cast] Channel created for namespace:", NAMESPACE);
 
-      channelMessageListener = attachChannelListener(channel, messageListenersRef);
+        channelMessageListener = attachChannelListener(channel, messageListenersRef);
 
-      const pending = pendingMessagesRef.current.splice(0);
-      for (const msg of pending) {
-        channel.sendMessage(JSON.stringify(msg)).catch((e: unknown) => {
-          console.warn("[Cast] Failed to send queued message:", e);
-        });
+        const pending = pendingMessagesRef.current.splice(0);
+        console.log("[Cast] Sending", pending.length, "pending messages");
+        for (const msg of pending) {
+          channel.sendMessage(JSON.stringify(msg)).catch((e: unknown) => {
+            console.warn("[Cast] Failed to send queued message:", e);
+          });
+        }
+      } catch (e) {
+        console.warn("[Cast] Channel setup error:", e);
+      }
+    };
+
+    const checkForSession = async () => {
+      if (channelReadyRef.current) return;
+      try {
+        const session = await GoogleCast!.SessionManager.getCurrentCastSession();
+        if (session && !channelReadyRef.current) {
+          console.log("[Cast] Found active session via poll, setting up...");
+          setupSession(session);
+        }
+      } catch (e) {
+        console.warn("[Cast] Poll check error:", e);
       }
     };
 
@@ -197,21 +217,27 @@ export function CastProvider({ children }: { children: ReactNode }) {
             3: "connected",
           };
           const newState = stateMap[state] || "notConnected";
+          console.log("[Cast] State changed:", newState, "raw:", state);
           setCastState(newState);
           setIsAvailable(state > 0);
           setIsConnecting(state === 2);
-          if (state !== 3) {
-            setIsCasting(state === 3);
+
+          if (state === 3) {
+            setTimeout(checkForSession, 500);
+          } else {
+            setIsCasting(false);
           }
         });
 
         const sessionManager = GoogleCast.SessionManager;
 
         sessionStartedListener = sessionManager.onSessionStarted((session: CastSession) => {
+          console.log("[Cast] onSessionStarted fired");
           setupSession(session);
         });
 
         sessionEndedListener = sessionManager.onSessionEnded(() => {
+          console.log("[Cast] onSessionEnded fired");
           channelRef.current = null;
           channelReadyRef.current = false;
           setIsCasting(false);
@@ -226,6 +252,7 @@ export function CastProvider({ children }: { children: ReactNode }) {
 
         const currentSession = await sessionManager.getCurrentCastSession();
         if (currentSession) {
+          console.log("[Cast] Found existing session on mount");
           setupSession(currentSession);
         }
       } catch (e) {
@@ -244,13 +271,17 @@ export function CastProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const sendMessage = useCallback(async (message: object) => {
+    const msgType = (message as { type?: string }).type || "unknown";
     if (channelReadyRef.current && channelRef.current) {
       try {
+        console.log("[Cast] Sending message:", msgType);
         await channelRef.current.sendMessage(JSON.stringify(message));
+        console.log("[Cast] Message sent successfully:", msgType);
       } catch (e) {
-        console.warn("[Cast] Send message error:", e);
+        console.warn("[Cast] Send message error:", msgType, e);
       }
     } else {
+      console.log("[Cast] Channel not ready, queuing message:", msgType, "channelReady:", channelReadyRef.current);
       pendingMessagesRef.current.push(message);
     }
   }, []);
