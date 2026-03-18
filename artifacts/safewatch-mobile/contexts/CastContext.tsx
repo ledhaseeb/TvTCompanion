@@ -84,66 +84,47 @@ const defaultContext: CastContextType = {
 
 const CastCtx = createContext<CastContextType>(defaultContext);
 
-interface CastDevice {
-  friendlyName?: string;
+type CastStateString = "noDevicesAvailable" | "notConnected" | "connecting" | "connected";
+
+interface CastChannelObj {
+  sendMessage: (message: Record<string, unknown> | string) => Promise<void>;
+  onMessage: (listener: (message: Record<string, unknown> | string) => void) => void;
+  offMessage: () => void;
+  remove: () => Promise<void>;
 }
 
-interface CastSession {
-  device?: CastDevice;
-  addChannel: (namespace: string) => CastChannel;
+interface CastSessionObj {
+  id?: string;
+  addChannel: (namespace: string) => Promise<CastChannelObj>;
+  getCastDevice: () => Promise<{ friendlyName?: string; modelName?: string } | null>;
 }
 
-interface CastChannel {
-  sendMessage: (message: string) => Promise<void>;
-  onMessage: (handler: (message: string | Record<string, unknown>) => void) => Subscription;
+interface SessionManagerObj {
+  onSessionStarted: (handler: (session: CastSessionObj) => void) => { remove: () => void };
+  onSessionStartFailed: (handler: (session: CastSessionObj, error: string) => void) => { remove: () => void };
+  onSessionEnded: (handler: (session: CastSessionObj, error?: string) => void) => { remove: () => void };
+  onSessionResumed: (handler: (session: CastSessionObj) => void) => { remove: () => void };
+  getCurrentCastSession: () => Promise<CastSessionObj | null>;
+  endCurrentSession: (stopCasting?: boolean) => Promise<void>;
 }
 
-interface Subscription {
-  remove?: () => void;
+interface GoogleCastAPI {
+  onCastStateChanged: (listener: (castState: CastStateString) => void) => { remove: () => void };
+  showCastDialog: () => Promise<boolean>;
+  getSessionManager: () => SessionManagerObj;
+  sessionManager: SessionManagerObj;
 }
 
-interface GoogleCastModule {
-  CastContext: {
-    onCastStateChanged: (handler: (state: number) => void) => Subscription;
-    showCastDialog: () => Promise<void>;
-  };
-  SessionManager: {
-    onSessionStarted: (handler: (session: CastSession) => void) => Subscription;
-    onSessionEnded: (handler: () => void) => Subscription;
-    getCurrentCastSession: () => Promise<CastSession | null>;
-    endCurrentSession: (stopCasting: boolean) => Promise<void>;
-  };
-  CastButton?: ComponentType<{ style?: ViewStyle; tintColor?: string }>;
-}
-
-let GoogleCast: GoogleCastModule | null = null;
+let GoogleCast: GoogleCastAPI | null = null;
 let CastButtonComponent: ComponentType<{ style?: ViewStyle; tintColor?: string }> | null = null;
 
 try {
   const mod = require("react-native-google-cast");
-  GoogleCast = (mod.default || mod) as GoogleCastModule;
+  GoogleCast = (mod.default || mod) as GoogleCastAPI;
   CastButtonComponent = (mod.CastButton || null) as typeof CastButtonComponent;
+  console.log("[Cast] Module loaded successfully");
 } catch {
   console.log("[Cast] react-native-google-cast not available (Expo Go)");
-}
-
-function attachChannelListener(
-  channel: CastChannel,
-  listeners: React.RefObject<Set<(msg: ReceiverMessage) => void>>,
-): Subscription {
-  return channel.onMessage((message: string | Record<string, unknown>) => {
-    let parsed: ReceiverMessage;
-    if (typeof message === "string") {
-      try {
-        parsed = JSON.parse(message) as ReceiverMessage;
-      } catch {
-        return;
-      }
-    } else {
-      parsed = message as ReceiverMessage;
-    }
-    listeners.current.forEach((cb) => cb(parsed));
-  });
 }
 
 export function CastProvider({ children }: { children: ReactNode }) {
@@ -154,98 +135,118 @@ export function CastProvider({ children }: { children: ReactNode }) {
   const [castState, setCastState] = useState<CastContextType["castState"]>("noDevicesAvailable");
 
   const messageListenersRef = useRef<Set<(msg: ReceiverMessage) => void>>(new Set());
-  const channelRef = useRef<CastChannel | null>(null);
+  const channelRef = useRef<CastChannelObj | null>(null);
   const channelReadyRef = useRef(false);
   const pendingMessagesRef = useRef<object[]>([]);
 
   useEffect(() => {
     if (!GoogleCast || Platform.OS === "web") return;
 
-    let castStateListener: Subscription | undefined;
-    let sessionStartedListener: Subscription | undefined;
-    let sessionEndedListener: Subscription | undefined;
-    let channelMessageListener: Subscription | undefined;
+    let castStateSubscription: { remove: () => void } | undefined;
+    let sessionStartedSubscription: { remove: () => void } | undefined;
+    let sessionStartFailedSubscription: { remove: () => void } | undefined;
+    let sessionEndedSubscription: { remove: () => void } | undefined;
+    let sessionResumedSubscription: { remove: () => void } | undefined;
 
-    const setupSession = (session: CastSession) => {
-      console.log("[Cast] setupSession called, device:", session.device?.friendlyName);
+    const setupSession = async (session: CastSessionObj) => {
+      console.log("[Cast] setupSession called, session id:", session.id);
       setIsCasting(true);
       setIsConnecting(false);
-      setDeviceName(session.device?.friendlyName || "Chromecast");
 
       try {
-        const channel = session.addChannel(NAMESPACE);
+        const device = await session.getCastDevice();
+        const name = device?.friendlyName || "Chromecast";
+        console.log("[Cast] Device:", name);
+        setDeviceName(name);
+      } catch (e) {
+        console.warn("[Cast] getCastDevice error:", e);
+        setDeviceName("Chromecast");
+      }
+
+      try {
+        const channel = await session.addChannel(NAMESPACE);
         channelRef.current = channel;
         channelReadyRef.current = true;
         console.log("[Cast] Channel created for namespace:", NAMESPACE);
 
-        channelMessageListener = attachChannelListener(channel, messageListenersRef);
+        channel.onMessage((message: Record<string, unknown> | string) => {
+          let parsed: ReceiverMessage;
+          if (typeof message === "string") {
+            try {
+              parsed = JSON.parse(message) as ReceiverMessage;
+            } catch {
+              return;
+            }
+          } else {
+            parsed = message as unknown as ReceiverMessage;
+          }
+          console.log("[Cast] Received message:", parsed.type);
+          messageListenersRef.current.forEach((cb) => cb(parsed));
+        });
 
         const pending = pendingMessagesRef.current.splice(0);
         console.log("[Cast] Sending", pending.length, "pending messages");
         for (const msg of pending) {
-          channel.sendMessage(JSON.stringify(msg)).catch((e: unknown) => {
+          try {
+            await channel.sendMessage(msg as Record<string, unknown>);
+            console.log("[Cast] Sent pending message:", (msg as { type?: string }).type);
+          } catch (e) {
             console.warn("[Cast] Failed to send queued message:", e);
-          });
+          }
         }
       } catch (e) {
         console.warn("[Cast] Channel setup error:", e);
       }
     };
 
-    const checkForSession = async (attempt = 1) => {
-      if (channelReadyRef.current) return;
-      try {
-        const session = await GoogleCast!.SessionManager.getCurrentCastSession();
-        if (session && !channelReadyRef.current) {
-          console.log("[Cast] Found active session via poll (attempt", attempt + "), setting up...");
-          setupSession(session);
-        } else if (!session && attempt < 10) {
-          console.log("[Cast] No session found on attempt", attempt, ", retrying...");
-          setTimeout(() => checkForSession(attempt + 1), 500);
-        } else {
-          console.log("[Cast] Session poll gave up after", attempt, "attempts, channelReady:", channelReadyRef.current);
-        }
-      } catch (e) {
-        console.warn("[Cast] Poll check error (attempt " + attempt + "):", e);
-        if (attempt < 10) {
-          setTimeout(() => checkForSession(attempt + 1), 500);
-        }
-      }
-    };
+    const sessionManager = GoogleCast.getSessionManager();
 
     const setup = async () => {
       try {
-        const castCtx = GoogleCast.CastContext;
+        castStateSubscription = GoogleCast!.onCastStateChanged((state: CastStateString) => {
+          console.log("[Cast] State changed:", state);
+          setCastState(state);
+          setIsAvailable(state !== "noDevicesAvailable");
+          setIsConnecting(state === "connecting");
 
-        castStateListener = castCtx.onCastStateChanged((state: number) => {
-          const stateMap: Record<number, CastContextType["castState"]> = {
-            0: "noDevicesAvailable",
-            1: "notConnected",
-            2: "connecting",
-            3: "connected",
-          };
-          const newState = stateMap[state] || "notConnected";
-          console.log("[Cast] State changed:", newState, "raw:", state);
-          setCastState(newState);
-          setIsAvailable(state > 0);
-          setIsConnecting(state === 2);
-
-          if (state === 3) {
-            setTimeout(checkForSession, 500);
-          } else {
+          if (state === "connected") {
+            sessionManager.getCurrentCastSession().then((session) => {
+              if (session && !channelReadyRef.current) {
+                console.log("[Cast] State=connected, found session via poll");
+                setupSession(session);
+              }
+            }).catch((e) => {
+              console.warn("[Cast] Poll error on state change:", e);
+            });
+          } else if (state !== "connecting") {
             setIsCasting(false);
           }
         });
 
-        const sessionManager = GoogleCast.SessionManager;
-
-        sessionStartedListener = sessionManager.onSessionStarted((session: CastSession) => {
-          console.log("[Cast] onSessionStarted fired");
+        sessionStartedSubscription = sessionManager.onSessionStarted((session: CastSessionObj) => {
+          console.log("[Cast] onSessionStarted fired, id:", session.id);
           setupSession(session);
         });
 
-        sessionEndedListener = sessionManager.onSessionEnded(() => {
-          console.log("[Cast] onSessionEnded fired");
+        sessionStartFailedSubscription = sessionManager.onSessionStartFailed((_session: CastSessionObj, error: string) => {
+          console.warn("[Cast] Session start failed:", error);
+          setIsConnecting(false);
+          setIsCasting(false);
+        });
+
+        sessionResumedSubscription = sessionManager.onSessionResumed((session: CastSessionObj) => {
+          console.log("[Cast] onSessionResumed fired");
+          setupSession(session);
+        });
+
+        sessionEndedSubscription = sessionManager.onSessionEnded((_session: CastSessionObj, error?: string) => {
+          console.log("[Cast] onSessionEnded fired, error:", error);
+          if (channelRef.current) {
+            try {
+              channelRef.current.offMessage();
+              channelRef.current.remove().catch(() => {});
+            } catch {}
+          }
           channelRef.current = null;
           channelReadyRef.current = false;
           setIsCasting(false);
@@ -261,7 +262,7 @@ export function CastProvider({ children }: { children: ReactNode }) {
         const currentSession = await sessionManager.getCurrentCastSession();
         if (currentSession) {
           console.log("[Cast] Found existing session on mount");
-          setupSession(currentSession);
+          await setupSession(currentSession);
         }
       } catch (e) {
         console.warn("[Cast] Setup error:", e);
@@ -271,10 +272,11 @@ export function CastProvider({ children }: { children: ReactNode }) {
     setup();
 
     return () => {
-      castStateListener?.remove?.();
-      sessionStartedListener?.remove?.();
-      sessionEndedListener?.remove?.();
-      channelMessageListener?.remove?.();
+      castStateSubscription?.remove?.();
+      sessionStartedSubscription?.remove?.();
+      sessionStartFailedSubscription?.remove?.();
+      sessionEndedSubscription?.remove?.();
+      sessionResumedSubscription?.remove?.();
     };
   }, []);
 
@@ -283,13 +285,13 @@ export function CastProvider({ children }: { children: ReactNode }) {
     if (channelReadyRef.current && channelRef.current) {
       try {
         console.log("[Cast] Sending message:", msgType);
-        await channelRef.current.sendMessage(JSON.stringify(message));
+        await channelRef.current.sendMessage(message as Record<string, unknown>);
         console.log("[Cast] Message sent successfully:", msgType);
       } catch (e) {
         console.warn("[Cast] Send message error:", msgType, e);
       }
     } else {
-      console.log("[Cast] Channel not ready, queuing message:", msgType, "channelReady:", channelReadyRef.current);
+      console.log("[Cast] Channel not ready, queuing message:", msgType);
       pendingMessagesRef.current.push(message);
     }
   }, []);
@@ -298,7 +300,8 @@ export function CastProvider({ children }: { children: ReactNode }) {
     if (!GoogleCast) return;
     try {
       setIsConnecting(true);
-      await GoogleCast.CastContext.showCastDialog();
+      console.log("[Cast] Showing cast dialog...");
+      await GoogleCast.showCastDialog();
     } catch (e) {
       console.warn("[Cast] Request session error:", e);
       setIsConnecting(false);
@@ -309,9 +312,16 @@ export function CastProvider({ children }: { children: ReactNode }) {
     if (!GoogleCast) return;
     try {
       await sendMessage({ type: "STOP" });
-      await GoogleCast.SessionManager.endCurrentSession(true);
+      const sessionManager = GoogleCast.getSessionManager();
+      await sessionManager.endCurrentSession(true);
     } catch (e) {
       console.warn("[Cast] End session error:", e);
+    }
+    if (channelRef.current) {
+      try {
+        channelRef.current.offMessage();
+        await channelRef.current.remove();
+      } catch {}
     }
     channelRef.current = null;
     channelReadyRef.current = false;
@@ -321,6 +331,7 @@ export function CastProvider({ children }: { children: ReactNode }) {
   }, [sendMessage]);
 
   const loadPlaylist = useCallback(async (playlist: PlaylistVideo[], startIndex = 0) => {
+    console.log("[Cast] loadPlaylist called, videos:", playlist.length, "startIndex:", startIndex);
     await sendMessage({
       type: "LOAD_PLAYLIST",
       playlist: playlist.map((v) => ({
