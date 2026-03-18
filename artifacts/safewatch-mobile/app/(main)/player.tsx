@@ -126,8 +126,13 @@ export default function PlayerScreen() {
     console.log("[Player] Cast effect check - isCasting:", isCasting, "isActive:", session.isActive, "playlistLen:", session.playlist.length, "alreadySent:", castPlaylistSentRef.current);
     if (isCasting && session.isActive && session.playlist.length > 0 && !castPlaylistSentRef.current) {
       castPlaylistSentRef.current = true;
-      console.log("[Player] Sending playlist to Cast receiver, videos:", session.playlist.length, "startIndex:", session.currentIndex);
-      loadPlaylist(session.playlist, session.currentIndex);
+      let fullPlaylist = [...session.playlist];
+      if (session.includeWindDown && session.calmingVideos && session.calmingVideos.length > 0) {
+        fullPlaylist = [...fullPlaylist, session.calmingVideos[0]];
+        console.log("[Player] Appending wind-down video to cast playlist:", session.calmingVideos[0].title);
+      }
+      console.log("[Player] Sending playlist to Cast receiver, videos:", fullPlaylist.length, "startIndex:", session.currentIndex);
+      loadPlaylist(fullPlaylist, session.currentIndex);
     }
   }, [isCasting, session.isActive, session.playlist.length]);
 
