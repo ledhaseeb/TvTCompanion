@@ -192,16 +192,24 @@ export function CastProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    const checkForSession = async () => {
+    const checkForSession = async (attempt = 1) => {
       if (channelReadyRef.current) return;
       try {
         const session = await GoogleCast!.SessionManager.getCurrentCastSession();
         if (session && !channelReadyRef.current) {
-          console.log("[Cast] Found active session via poll, setting up...");
+          console.log("[Cast] Found active session via poll (attempt", attempt + "), setting up...");
           setupSession(session);
+        } else if (!session && attempt < 10) {
+          console.log("[Cast] No session found on attempt", attempt, ", retrying...");
+          setTimeout(() => checkForSession(attempt + 1), 500);
+        } else {
+          console.log("[Cast] Session poll gave up after", attempt, "attempts, channelReady:", channelReadyRef.current);
         }
       } catch (e) {
-        console.warn("[Cast] Poll check error:", e);
+        console.warn("[Cast] Poll check error (attempt " + attempt + "):", e);
+        if (attempt < 10) {
+          setTimeout(() => checkForSession(attempt + 1), 500);
+        }
       }
     };
 

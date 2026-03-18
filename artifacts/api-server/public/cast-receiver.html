@@ -66,6 +66,23 @@
       color: #fff;
       margin-top: 16px;
     }
+    #debug-log {
+      position: fixed;
+      bottom: 10px;
+      left: 10px;
+      right: 10px;
+      max-height: 200px;
+      overflow-y: auto;
+      background: rgba(0,0,0,0.8);
+      color: #2dd4a8;
+      font-family: monospace;
+      font-size: 14px;
+      padding: 8px;
+      border-radius: 4px;
+      z-index: 100;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
   </style>
 </head>
 <body>
@@ -83,12 +100,26 @@
     <div id="youtube-player"></div>
   </div>
 
+  <div id="debug-log"></div>
+
   <script src="https://www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
   <script src="https://www.youtube.com/iframe_api"></script>
   <script>
     var NAMESPACE = 'urn:x-cast:com.safewatch.cast';
 
+    var debugEl = document.getElementById('debug-log');
+    var debugLines = [];
+    function debugLog(msg) {
+      var ts = new Date().toLocaleTimeString();
+      var line = ts + ' ' + msg;
+      console.log(line);
+      debugLines.push(line);
+      if (debugLines.length > 15) debugLines.shift();
+      debugEl.textContent = debugLines.join('\n');
+    }
+
     var ytPlayer = null;
+    var ytReady = false;
     var playlist = [];
     var currentIndex = 0;
     var isPlaying = false;
@@ -98,8 +129,12 @@
     var accumulatedPlaySeconds = 0;
     var lastPlayStartTime = 0;
 
+    debugLog('Receiver loading...');
+
     var castContext = cast.framework.CastReceiverContext.getInstance();
     var playerManager = castContext.getPlayerManager();
+
+    debugLog('Cast context created, namespace: ' + NAMESPACE);
 
     function showIdle() {
       document.getElementById('idle-screen').classList.remove('hidden');
@@ -140,12 +175,13 @@
       try {
         castContext.sendCustomMessage(NAMESPACE, undefined, message);
       } catch (e) {
-        console.log('Failed to send status:', e);
+        debugLog('Status send error: ' + e);
       }
     }
 
     function playVideo(index) {
       if (index < 0 || index >= playlist.length) {
+        debugLog('Playlist complete, all videos played');
         sendMessage({ type: 'SESSION_COMPLETE' });
         sessionActive = false;
         showIdle();
@@ -156,8 +192,10 @@
       var video = playlist[currentIndex];
       var videoId = video.youtubeId || '';
 
+      debugLog('Playing video ' + (index+1) + '/' + playlist.length + ': ' + videoId + ' - ' + (video.title || ''));
+
       if (!videoId) {
-        console.error('No video ID for index', index);
+        debugLog('No video ID for index ' + index + ', skipping');
         playVideo(index + 1);
         return;
       }
@@ -165,8 +203,11 @@
       showLoading();
       hideIdle();
 
-      if (ytPlayer && typeof ytPlayer.loadVideoById === 'function') {
+      if (ytPlayer && ytReady && typeof ytPlayer.loadVideoById === 'function') {
+        debugLog('Loading video via YT API: ' + videoId);
         ytPlayer.loadVideoById(videoId);
+      } else {
+        debugLog('YT player not ready yet, waiting...');
       }
 
       sendStatus();
@@ -176,16 +217,27 @@
       try {
         castContext.sendCustomMessage(NAMESPACE, undefined, message);
       } catch (e) {
-        console.log('Failed to send message:', e);
+        debugLog('Send error: ' + e);
       }
     }
 
     function onYTPlayerReady() {
-      console.log('YouTube player ready');
+      ytReady = true;
+      debugLog('YouTube player ready');
       hideLoading();
     }
 
     function onYTPlayerStateChange(event) {
+      var stateNames = {
+        '-1': 'unstarted',
+        '0': 'ended',
+        '1': 'playing',
+        '2': 'paused',
+        '3': 'buffering',
+        '5': 'cued'
+      };
+      debugLog('YT state: ' + (stateNames[event.data] || event.data));
+
       if (event.data === YT.PlayerState.PLAYING) {
         isPlaying = true;
         lastPlayStartTime = Date.now();
@@ -212,7 +264,7 @@
     }
 
     function onYTPlayerError(event) {
-      console.error('YT error:', event.data, 'for index', currentIndex);
+      debugLog('YT error: ' + event.data + ' for video index ' + currentIndex);
       sendMessage({
         type: 'VIDEO_ERROR',
         index: currentIndex,
@@ -223,6 +275,7 @@
     }
 
     window.onYouTubeIframeAPIReady = function() {
+      debugLog('YT IFrame API ready, creating player...');
       ytPlayer = new YT.Player('youtube-player', {
         width: '100%',
         height: '100%',
@@ -246,7 +299,7 @@
     };
 
     castContext.addCustomMessageListener(NAMESPACE, function(event) {
-      console.log('Cast message received:', event.data);
+      debugLog('MSG received: ' + JSON.stringify(event.data).substring(0, 200));
       var data = event.data;
 
       switch (data.type) {
@@ -257,17 +310,21 @@
           sessionStartTime = Date.now();
           accumulatedPlaySeconds = 0;
           lastPlayStartTime = 0;
+
+          debugLog('Playlist loaded: ' + playlist.length + ' videos, starting at ' + currentIndex);
           hideIdle();
 
           if (statusInterval) clearInterval(statusInterval);
           statusInterval = setInterval(sendStatus, 3000);
 
-          if (ytPlayer && typeof ytPlayer.loadVideoById === 'function') {
+          if (ytPlayer && ytReady && typeof ytPlayer.loadVideoById === 'function') {
             playVideo(currentIndex);
           } else {
+            debugLog('Waiting for YT player to be ready...');
             var checkReady = setInterval(function() {
-              if (ytPlayer && typeof ytPlayer.loadVideoById === 'function') {
+              if (ytPlayer && ytReady && typeof ytPlayer.loadVideoById === 'function') {
                 clearInterval(checkReady);
+                debugLog('YT player now ready, starting playback');
                 playVideo(currentIndex);
               }
             }, 200);
@@ -310,7 +367,7 @@
           break;
 
         default:
-          console.log('Unknown message type:', data.type);
+          debugLog('Unknown message type: ' + data.type);
       }
     });
 
@@ -320,7 +377,7 @@
     castOptions.customNamespaces[NAMESPACE] = cast.framework.system.MessageType.JSON;
 
     castContext.start(castOptions);
-    console.log('SafeWatch Cast Receiver started');
+    debugLog('Cast receiver started, waiting for sender...');
   </script>
 </body>
 </html>
