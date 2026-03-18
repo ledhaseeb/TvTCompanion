@@ -22,5 +22,6 @@ const publicDir = path.resolve(currentDir, "..", "public");
 app.use(express.static(publicDir));
 
 app.use("/api", router);
+app.use("/api", express.static(publicDir));
 
 export default app;
