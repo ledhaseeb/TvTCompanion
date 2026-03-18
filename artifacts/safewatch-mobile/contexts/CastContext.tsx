@@ -21,6 +21,8 @@ interface CastStatusMessage {
   currentVideoTitle: string;
   currentVideoId: string;
   elapsedSeconds: number;
+  videoCurrentTime?: number;
+  videoDuration?: number;
 }
 
 interface CastEventMessage {
@@ -53,6 +55,9 @@ interface CastContextType {
   playMedia: () => Promise<void>;
   stopMedia: () => Promise<void>;
   seekTo: (position: number) => Promise<void>;
+  seekForward: (seconds?: number) => Promise<void>;
+  seekBackward: (seconds?: number) => Promise<void>;
+  setVolume: (volume: number) => Promise<void>;
   skipVideo: () => Promise<void>;
   skipToVideo: (index: number) => Promise<void>;
   onReceiverMessage: (callback: (msg: ReceiverMessage) => void) => () => void;
@@ -76,6 +81,9 @@ const defaultContext: CastContextType = {
   playMedia: async () => {},
   stopMedia: async () => {},
   seekTo: async () => {},
+  seekForward: async () => {},
+  seekBackward: async () => {},
+  setVolume: async () => {},
   skipVideo: async () => {},
   skipToVideo: async () => {},
   onReceiverMessage: () => () => {},
@@ -362,8 +370,21 @@ export function CastProvider({ children }: { children: ReactNode }) {
     await sendMessage({ type: "STOP" });
   }, [sendMessage]);
 
-  const seekTo = useCallback(async (_position: number) => {
-  }, []);
+  const seekTo = useCallback(async (position: number) => {
+    await sendMessage({ type: "SEEK_TO", position });
+  }, [sendMessage]);
+
+  const seekForward = useCallback(async (seconds = 10) => {
+    await sendMessage({ type: "SEEK_FORWARD", seconds });
+  }, [sendMessage]);
+
+  const seekBackward = useCallback(async (seconds = 10) => {
+    await sendMessage({ type: "SEEK_BACKWARD", seconds });
+  }, [sendMessage]);
+
+  const setVolume = useCallback(async (volume: number) => {
+    await sendMessage({ type: "SET_VOLUME", volume: Math.max(0, Math.min(100, volume)) });
+  }, [sendMessage]);
 
   const skipVideo = useCallback(async () => {
     await sendMessage({ type: "SKIP" });
@@ -396,6 +417,9 @@ export function CastProvider({ children }: { children: ReactNode }) {
         playMedia,
         stopMedia,
         seekTo,
+        seekForward,
+        seekBackward,
+        setVolume,
         skipVideo,
         skipToVideo,
         onReceiverMessage,

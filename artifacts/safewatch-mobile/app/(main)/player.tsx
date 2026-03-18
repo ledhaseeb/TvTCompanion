@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Image,
 } from "react-native";
+import RNSlider from "@react-native-community/slider";
 import { useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -53,6 +54,9 @@ export default function PlayerScreen() {
     pauseMedia,
     playMedia,
     stopMedia,
+    seekForward,
+    seekBackward,
+    setVolume,
     requestSession,
     endCastSession,
     onReceiverMessage,
@@ -62,6 +66,9 @@ export default function PlayerScreen() {
   const [playing, setPlaying] = useState(true);
   const [elapsed, setElapsed] = useState(0);
   const [ready, setReady] = useState(false);
+  const [castVolume, setCastVolume] = useState(100);
+  const [videoCurrentTime, setVideoCurrentTime] = useState(0);
+  const [videoDuration, setVideoDuration] = useState(0);
   const watchStartRef = useRef(Date.now());
   const totalWatchedRef = useRef(0);
   const justAdvancedRef = useRef(false);
@@ -154,6 +161,12 @@ export default function PlayerScreen() {
           castElapsedRef.current = status.elapsedSeconds;
           setElapsed(status.elapsedSeconds);
           updateWatchTime(status.elapsedSeconds);
+          if (status.videoCurrentTime !== undefined) {
+            setVideoCurrentTime(status.videoCurrentTime);
+          }
+          if (status.videoDuration !== undefined) {
+            setVideoDuration(status.videoDuration);
+          }
 
           if (
             session.finishMode === "hard" &&
@@ -291,6 +304,12 @@ export default function PlayerScreen() {
     }
   };
 
+  const handleVolumeChange = (value: number) => {
+    const vol = Math.round(value);
+    setCastVolume(vol);
+    setVolume(vol);
+  };
+
   useEffect(() => {
     if (!session.isActive && session.sessionId) {
       // @ts-expect-error -- expo-router typed routes don't cover dynamic params
@@ -361,14 +380,14 @@ export default function PlayerScreen() {
         )}
 
         {isCasting && (
-          <View style={[styles.castingArea, { height: playerHeight }]}>
+          <View style={[styles.castingArea, { height: playerHeight + 60 }]}>
             <Image
               source={{ uri: thumbnailUrl }}
               style={styles.castThumbnail}
               resizeMode="cover"
             />
             <View style={styles.castOverlay}>
-              <Feather name="cast" size={40} color="#2dd4a8" />
+              <Feather name="cast" size={32} color="#2dd4a8" />
               <Text style={styles.castDeviceName}>
                 Casting to {deviceName || "Chromecast"}
               </Text>
@@ -377,6 +396,13 @@ export default function PlayerScreen() {
               </Text>
 
               <View style={styles.castControls}>
+                <TouchableOpacity
+                  onPress={() => seekBackward(10)}
+                  style={styles.castControlBtnSmall}
+                >
+                  <Feather name="rewind" size={20} color={colors.white} />
+                </TouchableOpacity>
+
                 <TouchableOpacity
                   onPress={handleCastPlayPause}
                   style={styles.castControlBtn}
@@ -387,6 +413,38 @@ export default function PlayerScreen() {
                     color={colors.white}
                   />
                 </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => seekForward(10)}
+                  style={styles.castControlBtnSmall}
+                >
+                  <Feather name="fast-forward" size={20} color={colors.white} />
+                </TouchableOpacity>
+              </View>
+
+              {videoDuration > 0 && (
+                <Text style={styles.castTimeText}>
+                  {formatTime(videoCurrentTime)} / {formatTime(videoDuration)}
+                </Text>
+              )}
+
+              <View style={styles.volumeRow}>
+                <Feather
+                  name={castVolume === 0 ? "volume-x" : castVolume < 50 ? "volume-1" : "volume-2"}
+                  size={16}
+                  color={colors.textTertiary}
+                />
+                <RNSlider
+                  style={styles.volumeSlider}
+                  minimumValue={0}
+                  maximumValue={100}
+                  step={5}
+                  value={castVolume}
+                  onSlidingComplete={handleVolumeChange}
+                  minimumTrackTintColor="#2dd4a8"
+                  maximumTrackTintColor="rgba(255,255,255,0.3)"
+                  thumbTintColor="#2dd4a8"
+                />
               </View>
             </View>
           </View>
@@ -549,6 +607,32 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.15)",
     justifyContent: "center",
     alignItems: "center",
+  },
+  castControlBtnSmall: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "rgba(255,255,255,0.1)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  castTimeText: {
+    color: colors.textTertiary,
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    marginTop: 8,
+  },
+  volumeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    width: "80%",
+    maxWidth: 280,
+    marginTop: 12,
+    gap: 8,
+  },
+  volumeSlider: {
+    flex: 1,
+    height: 30,
   },
   controlBar: {
     flexDirection: "row",
