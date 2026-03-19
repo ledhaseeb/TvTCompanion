@@ -422,10 +422,6 @@ export default function PlayerScreen() {
     );
   }
 
-  const progress = Math.min(elapsed / sessionTotalSeconds, 1);
-  const remaining = Math.max(sessionTotalSeconds - elapsed, 0);
-  const isOvertime = elapsed > sessionTotalSeconds;
-
   const castCurrentVideo = isCasting && castPlaylistRef.current.length > 0
     ? castPlaylistRef.current[castVideoIndex] || null
     : null;
@@ -572,19 +568,6 @@ export default function PlayerScreen() {
           </Text>
         </View>
 
-        <View style={styles.timeInfo}>
-          <Text
-            style={[
-              styles.timeText,
-              isOvertime && styles.timeTextOvertime,
-            ]}
-          >
-            {isOvertime ? "+" : ""}
-            {formatTime(isOvertime ? elapsed - sessionTotalSeconds : remaining)}{" "}
-            {isOvertime ? "over" : "left"}
-          </Text>
-        </View>
-
         <TouchableOpacity
           onPress={handleSkip}
           style={styles.skipBtn}
@@ -607,18 +590,6 @@ export default function PlayerScreen() {
             <Feather name="cast" size={20} color={isCasting ? "#2dd4a8" : colors.white} />
           </TouchableOpacity>
         )}
-      </View>
-
-      <View style={styles.progressBar}>
-        <View
-          style={[
-            styles.progressFill,
-            {
-              width: `${progress * 100}%`,
-              backgroundColor: isOvertime ? colors.warning : colors.primary,
-            },
-          ]}
-        />
       </View>
 
       <View style={styles.infoBar}>
@@ -784,18 +755,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: "Inter_600SemiBold",
   },
-  timeInfo: {
-    flex: 1,
-  },
-  timeText: {
-    color: colors.white,
-    fontSize: 13,
-    fontFamily: "Inter_600SemiBold",
-    textAlign: "center",
-  },
-  timeTextOvertime: {
-    color: colors.warning,
-  },
   skipBtn: {
     width: 36,
     height: 36,
@@ -803,14 +762,6 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.15)",
     justifyContent: "center",
     alignItems: "center",
-  },
-  progressBar: {
-    height: 3,
-    backgroundColor: "rgba(255,255,255,0.2)",
-  },
-  progressFill: {
-    height: "100%",
-    borderRadius: 2,
   },
   infoBar: {
     backgroundColor: "#1a1a2e",
