@@ -17,7 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import YoutubePlayer from "react-native-youtube-iframe";
 import { useSession } from "@/contexts/SessionContext";
 import { useCast } from "@/contexts/CastContext";
-import type { ReceiverMessage, CastStatusMessage } from "@/contexts/CastContext";
+import type { ReceiverMessage, CastStatusMessage, CastEventMessage } from "@/contexts/CastContext";
 import { apiRequest } from "@/lib/query-client";
 import { colors, spacing, borderRadius } from "@/constants/colors";
 
@@ -144,7 +144,6 @@ export default function PlayerScreen() {
   }, [playing, session.finishMode, sessionTotalSeconds, isCasting]);
 
   useEffect(() => {
-    console.log("[Player] Cast effect check - isCasting:", isCasting, "isActive:", session.isActive, "playlistLen:", session.playlist.length, "alreadySent:", castPlaylistSentRef.current);
     if (isCasting && session.isActive && session.playlist.length > 0 && !castPlaylistSentRef.current) {
       accumulatePlayTime();
       preCastWatchedRef.current = sessionWatchedRef.current;
@@ -157,11 +156,9 @@ export default function PlayerScreen() {
       let fullPlaylist = [...session.playlist];
       if (session.includeWindDown && session.calmingVideos && session.calmingVideos.length > 0) {
         fullPlaylist = [...fullPlaylist, session.calmingVideos[0]];
-        console.log("[Player] Appending wind-down video to cast playlist:", session.calmingVideos[0].title);
       }
       castPlaylistRef.current = fullPlaylist;
       setCastTotalVideos(fullPlaylist.length);
-      console.log("[Player] Sending playlist to Cast receiver, videos:", fullPlaylist.length, "startIndex:", session.currentIndex);
       loadPlaylist(fullPlaylist, session.currentIndex);
     }
   }, [isCasting, session.isActive, session.playlist.length]);
@@ -225,7 +222,8 @@ export default function PlayerScreen() {
         }
 
         case "VIDEO_ENDED": {
-          const endedIndex = (msg as any).index ?? castVideoIndex;
+          const eventMsg = msg as CastEventMessage;
+          const endedIndex = eventMsg.index ?? castVideoIndex;
           const endedVideo = castPlaylistRef.current[endedIndex];
           if (endedVideo) {
             const dedupKey = `${session.sessionId}-${endedVideo.id}-${endedIndex}`;
@@ -307,7 +305,9 @@ export default function PlayerScreen() {
         durationSeconds: watchedSeconds,
         stimulationLevel,
       });
-    } catch {}
+    } catch (err) {
+      console.warn("[Player] Failed to record watch history:", err instanceof Error ? err.message : err);
+    }
   };
 
   const recordLocalWatchHistory = () => {
@@ -328,7 +328,9 @@ export default function PlayerScreen() {
           await submitWatchHistory(curCastVideo.id, watchedSecs, curCastVideo.stimulationLevel);
         }
       }
-      try { await stopMedia(); } catch {}
+      try { await stopMedia(); } catch (err) {
+        console.warn("[Player] Failed to stop cast media:", err instanceof Error ? err.message : err);
+      }
     } else {
       accumulatePlayTime();
       const curVideo = session.playlist[session.currentIndex];
