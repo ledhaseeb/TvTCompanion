@@ -36,7 +36,7 @@ EXPO_PUBLIC_FIREBASE_PROJECT_ID = "tvtantrum-yt-app"
 FIREBASE_PROJECT_ID = "tvtantrum-yt-app"
 FIREBASE_CLIENT_EMAIL = "firebase-adminsdk-fbsvc@tvtantrum-yt-app.iam.gserviceaccount.com"
 EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID = "696904036193-ao086i0ovmpdc45clrqq76m0121hi57r.apps.googleusercontent.com"
-EXPO_PUBLIC_API_URL = "https://www.kidsafetv.com"
+EXPO_PUBLIC_API_URL = "https://5695f896-4ef8-48ce-9292-73578d94d4b4-00-emt8n6x0r1bl.riker.replit.dev"
 EXPO_PUBLIC_CAST_APP_ID = "0F5E0B59"
 
 [nix]
