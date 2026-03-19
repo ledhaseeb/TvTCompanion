@@ -1,0 +1,122 @@
+I've gathered all the information. Here's a comprehensive answer you can paste into the mobile Replit's chat:
+
+Answer to SafeWatch Mobile Integration Questions
+1. Authentication
+The API uses Firebase token verification via middleware. Every API request (except a few public endpoints) must include:
+
+Authorization: Bearer <firebase-id-token>
+The middleware (server/middleware/auth.ts) calls admin.auth().verifyIdToken(token) and attaches the user to the request. It also caches tokens for 55 minutes to avoid redundant Firebase calls.
+
+User creation flow:
+
+POST /api/users/me — "Get or create" pattern. After Firebase sign-in, call this endpoint. It looks up the user by firebaseUid; if not found, it creates a new record using the email/display name from the Firebase token. Also records country and updates lastLoginAt.
+GET /api/users/me — Returns the current user's profile and role.
+2. All API Endpoints
+Here are the endpoints the mobile app would need (non-admin ones):
+
+User & Profile:
+
+Method	Path	Description
+GET	/api/users/me	Get current user profile
+POST	/api/users/me	Get or create user after Firebase auth
+PATCH	/api/users/me	Update user settings
+Children:
+
+Method	Path	Description
+GET	/api/children	List all children for current user
+POST	/api/children	Create a child profile
+GET	/api/children/:id	Get specific child
+PATCH	/api/children/:id	Update child profile
+DELETE	/api/children/:id	Delete child profile
+GET	/api/children-settings	Get settings for all children
+GET	/api/children/:childId/settings	Get settings for one child
+PATCH	/api/children/:childId/settings	Update child settings
+Sessions & Playlist:
+
+Method	Path	Description
+POST	/api/sessions	Start a new session (handles 409 conflict — see note below)
+GET	/api/sessions/active	Get current active session
+GET	/api/sessions	Get session history
+PATCH	/api/sessions/:id	Update/end a session
+POST	/api/sessions/playlist	Build a personalized playlist for a session
+POST	/api/sessions/playlist/replace	Replace a video (taper-aware, server-first)
+POST	/api/sessions/playlist/replace-calming	Replace calming/wind-down video
+Watch History:
+
+Method	Path	Description
+GET	/api/watch-history	Get watch history
+POST	/api/watch-history	Record a watch event
+Feedback:
+
+Method	Path	Description
+POST	/api/feedback/:sessionId/complete	Submit post-session parent feedback
+POST	/api/feedback/:sessionId/reactions	Record child reaction during session
+GET	/api/feedback/pending	List sessions needing feedback
+GET	/api/children/:childId/feedback	Get all feedback for a child
+GET	/api/children/:childId/feedback/trends	Stimulation/mood trends over time
+Favourites & Saved Videos:
+
+Method	Path	Description
+GET	/api/saved-videos	All saved videos across children
+GET	/api/children/:childId/saved-videos	Saved videos for a child
+POST	/api/children/:childId/saved-videos/:videoId	Save a video
+DELETE	/api/children/:childId/saved-videos/:videoId	Remove saved video
+GET	/api/show-subscriptions	List favourited shows
+POST	/api/show-subscriptions/toggle	Toggle favourite on a show
+Content Controls:
+
+Method	Path	Description
+GET	/api/hidden-content	List hidden content
+POST	/api/hidden-content	Hide a channel/series
+DELETE	/api/hidden-content/:targetType/:targetId	Unhide content
+GET	/api/children/:childId/preferences	Get show preferences
+POST	/api/children/:childId/preferences	Set preference for a show
+Caregivers:
+
+Method	Path	Description
+GET	/api/caregivers/invite/:token	Validate invitation token (public)
+POST	/api/caregivers/accept	Accept caregiver invitation
+GET	/api/caregivers	List caregivers
+Browse/Content:
+
+Method	Path	Description
+GET	/api/channels	List all channels with series/video stats
+GET	/api/videos	List videos (filterable by channel/series)
+GET	/api/videos/eligible	Videos eligible for a child
+GET	/api/video-collections	Curated video collections
+GET	/api/themes	List content themes
+3. Database Schema (Key Tables)
+users: id (UUID PK), firebase_uid (unique), email, display_name, role ("admin"/"parent"/"caregiver"), parent_account_id (FK→users), country, favourite_boost_level (default 4), evening_protection_enabled, evening_protection_start_hour, evening_protection_max_stim, created_at
+
+children: id (UUID PK), user_id (FK→users), name, birth_month, birth_year, gender, interests (text[]), entertainment_minutes (default 30), sensitivity_score, sensitivity_detection, finish_mode, age_restriction_override, favourites_age_bypass, default_taper_mode, default_flatline_level, default_peak_*_level, default_wind_down_*_level, default_build_up_*_level, onboarding_complete
+
+videos: id (UUID PK), youtube_video_id (unique), channel_id (FK→channels), series_id (FK→series), title, stimulation_level (1-5), age_min, age_max, duration_seconds, thumbnail_url, is_published, is_embeddable, is_hidden, region_restriction (JSONB), themes (text[])
+
+sessions: id (UUID PK), user_id (FK→users), child_ids (text[]), started_at, ended_at, total_duration_seconds, feedback_required, feedback_completed_at
+
+watch_history: id (UUID PK), session_id (FK→sessions), video_id (FK→videos), child_ids (text[]), watched_at, duration_seconds, stimulation_level
+
+4. Favourites / Show Toggling
+Yes, there are two systems:
+
+user_show_subscriptions — Parents "favourite" a series/channel. Controlled by users.favourite_boost_level which multiplies how often those shows appear in playlists (2x to 128x). Toggle via POST /api/show-subscriptions/toggle.
+
+hidden_content — Parents can hide channels or series for their family. target_type is "video" or "channel", target_id is the UUID. These are excluded from playlist generation.
+
+saved_videos — Children can save individual videos to a personal collection (child_id, video_id).
+
+5. Playlist Generation
+Yes, the server has full playlist generation logic in server/playlistBuilder.ts. The endpoint is:
+
+POST /api/sessions/playlist — Body includes childIds, sessionLengthMinutes, taperMode ("taper_down"/"taper_up"/"taper_up_down"/"flatline"), and taper level parameters. It returns:
+
+playlist — ordered array of video objects following the taper curve
+calmingVideos — 3 wind-down videos (stim ≤ 1)
+replacementCandidates — map of stim level → video arrays for client-side fallback replacement
+6. Deployment Status
+The app is deployed on Replit. The session conflict (409) handling, server-first replace, and all the endpoints above are live on the deployed version.
+
+7. Firebase Auth — Yes
+Uses Authorization: Bearer <firebase-id-token> header. The middleware verifies via firebase-admin SDK's verifyIdToken(). The same Firebase project can be shared between web and mobile — just make sure the mobile app's Firebase config points to the same project.
+
+You can paste this whole response into the mobile Replit's chat. It covers everything they asked for.
