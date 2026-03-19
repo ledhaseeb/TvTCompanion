@@ -69,11 +69,15 @@ export default function PlayerScreen() {
   const [castVolume, setCastVolume] = useState(100);
   const [videoCurrentTime, setVideoCurrentTime] = useState(0);
   const [videoDuration, setVideoDuration] = useState(0);
+  const [castVideoTitle, setCastVideoTitle] = useState<string | null>(null);
+  const [castVideoIndex, setCastVideoIndex] = useState(0);
+  const [castTotalVideos, setCastTotalVideos] = useState(0);
   const watchStartRef = useRef(Date.now());
   const totalWatchedRef = useRef(0);
   const justAdvancedRef = useRef(false);
   const castPlaylistSentRef = useRef(false);
   const castElapsedRef = useRef(0);
+  const castPlaylistRef = useRef<typeof session.playlist>([]);
 
   const { width: screenWidth } = Dimensions.get("window");
   const playerHeight = Math.round((screenWidth * 9) / 16);
@@ -131,6 +135,8 @@ export default function PlayerScreen() {
         fullPlaylist = [...fullPlaylist, session.calmingVideos[0]];
         console.log("[Player] Appending wind-down video to cast playlist:", session.calmingVideos[0].title);
       }
+      castPlaylistRef.current = fullPlaylist;
+      setCastTotalVideos(fullPlaylist.length);
       console.log("[Player] Sending playlist to Cast receiver, videos:", fullPlaylist.length, "startIndex:", session.currentIndex);
       loadPlaylist(fullPlaylist, session.currentIndex);
     }
@@ -160,8 +166,10 @@ export default function PlayerScreen() {
         case "STATUS": {
           const status = msg as CastStatusMessage;
           setPlaying(status.isPlaying);
-          if (status.currentIndex !== session.currentIndex) {
-            setCurrentIndex(status.currentIndex);
+          setCastVideoIndex(status.currentIndex);
+          setCastTotalVideos(status.totalVideos);
+          if (status.currentVideoTitle) {
+            setCastVideoTitle(status.currentVideoTitle);
           }
           castElapsedRef.current = status.elapsedSeconds;
           setElapsed(status.elapsedSeconds);
@@ -316,7 +324,7 @@ export default function PlayerScreen() {
   };
 
   useEffect(() => {
-    if (!session.isActive && session.sessionId) {
+    if (!session.isActive && session.sessionId && !isCasting) {
       // @ts-expect-error -- expo-router typed routes don't cover dynamic params
       router.replace({
         pathname: FEEDBACK_PATH,
@@ -327,9 +335,11 @@ export default function PlayerScreen() {
         },
       });
     }
-  }, [session.isActive, session.sessionId]);
+  }, [session.isActive, session.sessionId, isCasting]);
 
-  if (!ready || !currentVideo || !session.isActive) {
+  const keepAliveForCast = isCasting && castPlaylistSentRef.current;
+
+  if (!ready || (!currentVideo && !keepAliveForCast) || (!session.isActive && !keepAliveForCast)) {
     if (!ready) {
       return (
         <View style={[styles.container, { alignItems: "center" }]}>
@@ -348,10 +358,17 @@ export default function PlayerScreen() {
   const remaining = Math.max(sessionTotalSeconds - elapsed, 0);
   const isOvertime = elapsed > sessionTotalSeconds;
 
-  const thumbnailUrl =
-    currentVideo.customThumbnailUrl ||
-    currentVideo.thumbnailUrl ||
-    `https://img.youtube.com/vi/${currentVideo.youtubeId}/hqdefault.jpg`;
+  const castCurrentVideo = isCasting && castPlaylistRef.current.length > 0
+    ? castPlaylistRef.current[castVideoIndex] || null
+    : null;
+
+  const displayVideo = castCurrentVideo || currentVideo;
+
+  const thumbnailUrl = displayVideo
+    ? (displayVideo.customThumbnailUrl ||
+       displayVideo.thumbnailUrl ||
+       `https://img.youtube.com/vi/${displayVideo.youtubeId || ""}/hqdefault.jpg`)
+    : `https://img.youtube.com/vi/default/hqdefault.jpg`;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -397,10 +414,17 @@ export default function PlayerScreen() {
                 Casting to {deviceName || "Chromecast"}
               </Text>
               <Text style={styles.castVideoTitle} numberOfLines={2}>
-                {currentVideo.title}
+                {castVideoTitle || displayVideo?.title || ""}
               </Text>
 
               <View style={styles.castControls}>
+                <TouchableOpacity
+                  onPress={() => seekBackward(60)}
+                  style={styles.castControlBtnTiny}
+                >
+                  <Text style={styles.seekLabel}>-1m</Text>
+                </TouchableOpacity>
+
                 <TouchableOpacity
                   onPress={() => seekBackward(10)}
                   style={styles.castControlBtnSmall}
@@ -424,6 +448,13 @@ export default function PlayerScreen() {
                   style={styles.castControlBtnSmall}
                 >
                   <Feather name="fast-forward" size={20} color={colors.white} />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => seekForward(60)}
+                  style={styles.castControlBtnTiny}
+                >
+                  <Text style={styles.seekLabel}>+1m</Text>
                 </TouchableOpacity>
               </View>
 
@@ -467,7 +498,9 @@ export default function PlayerScreen() {
 
         <View style={styles.videoIndexBadge}>
           <Text style={styles.videoIndexText}>
-            {session.currentIndex + 1}/{session.playlist.length}
+            {isCasting
+              ? `${castVideoIndex + 1}/${castTotalVideos || castPlaylistRef.current.length}`
+              : `${session.currentIndex + 1}/${session.playlist.length}`}
           </Text>
         </View>
 
@@ -522,25 +555,28 @@ export default function PlayerScreen() {
 
       <View style={styles.infoBar}>
         <Text style={styles.nowPlaying} numberOfLines={2}>
-          {currentVideo.title}
+          {isCasting ? (castVideoTitle || displayVideo?.title || "") : (currentVideo?.title || "")}
         </Text>
         <View style={styles.stimRow}>
           <Text style={styles.stimLabel}>Energy</Text>
-          {[1, 2, 3, 4, 5].map((i) => (
-            <View
-              key={i}
-              style={[
-                styles.stimDot,
-                {
-                  backgroundColor:
-                    i <= currentVideo.stimulationLevel
-                      ? colors.stimulation[currentVideo.stimulationLevel] ||
-                        colors.textTertiary
-                      : colors.border,
-                },
-              ]}
-            />
-          ))}
+          {[1, 2, 3, 4, 5].map((i) => {
+            const stimLevel = (displayVideo || currentVideo)?.stimulationLevel || 0;
+            return (
+              <View
+                key={i}
+                style={[
+                  styles.stimDot,
+                  {
+                    backgroundColor:
+                      i <= stimLevel
+                        ? colors.stimulation[stimLevel] ||
+                          colors.textTertiary
+                        : colors.border,
+                  },
+                ]}
+              />
+            );
+          })}
         </View>
       </View>
       </View>
@@ -602,7 +638,7 @@ const styles = StyleSheet.create({
   castControls: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.lg,
+    gap: spacing.md,
     marginTop: 16,
   },
   castControlBtn: {
@@ -620,6 +656,19 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.1)",
     justifyContent: "center",
     alignItems: "center",
+  },
+  castControlBtnTiny: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  seekLabel: {
+    color: colors.white,
+    fontSize: 11,
+    fontFamily: "Inter_600SemiBold",
   },
   castTimeText: {
     color: colors.textTertiary,
