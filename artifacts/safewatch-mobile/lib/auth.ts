@@ -106,6 +106,11 @@ export async function signInWithGoogle(): Promise<string> {
   ensureGoogleSignInConfigured();
   await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
   const response = await GoogleSignin.signIn();
+  if (response.type === "cancelled") {
+    const cancelErr = new Error("Sign-in was cancelled");
+    (cancelErr as any).code = String(statusCodes.SIGN_IN_CANCELLED);
+    throw cancelErr;
+  }
   const googleIdToken = response.data?.idToken;
   if (!googleIdToken) {
     throw new Error("No ID token returned from Google Sign-In");
