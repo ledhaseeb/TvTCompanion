@@ -10,10 +10,8 @@
       "android": {
         "buildType": "apk"
       },
-      "node": {
-        "installCommand": "pnpm install --no-frozen-lockfile"
-      },
       "env": {
+        "CI": "0",
         "EXPO_PUBLIC_API_URL": "https://5695f896-4ef8-48ce-9292-73578d94d4b4-00-emt8n6x0r1bl.riker.replit.dev",
         "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyBJY4oWuqCCWv73Q3UIF4aLhVWwbZvn9Lk",
         "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "tvtantrum-yt-app.firebaseapp.com",
@@ -27,10 +25,8 @@
       "android": {
         "buildType": "apk"
       },
-      "node": {
-        "installCommand": "pnpm install --no-frozen-lockfile"
-      },
       "env": {
+        "CI": "0",
         "EXPO_PUBLIC_API_URL": "https://5695f896-4ef8-48ce-9292-73578d94d4b4-00-emt8n6x0r1bl.riker.replit.dev",
         "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyBJY4oWuqCCWv73Q3UIF4aLhVWwbZvn9Lk",
         "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "tvtantrum-yt-app.firebaseapp.com",
@@ -41,10 +37,8 @@
     },
     "production": {
       "autoIncrement": true,
-      "node": {
-        "installCommand": "pnpm install --no-frozen-lockfile"
-      },
       "env": {
+        "CI": "0",
         "EXPO_PUBLIC_API_URL": "https://5695f896-4ef8-48ce-9292-73578d94d4b4-00-emt8n6x0r1bl.riker.replit.dev",
         "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyBJY4oWuqCCWv73Q3UIF4aLhVWwbZvn9Lk",
         "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "tvtantrum-yt-app.firebaseapp.com",
