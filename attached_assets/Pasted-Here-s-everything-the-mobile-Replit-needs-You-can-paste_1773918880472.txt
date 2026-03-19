@@ -1,0 +1,619 @@
+Here's everything the mobile Replit needs. You can paste this entire block into that Replit's chat:
+
+File 1: server/playlistBuilder.ts (complete — 509 lines)
+This is the entire playlist generation engine: taper modes, age filtering, calming video selection, replacement logic, and favourites boosting.
+
+import type { Video, Child } from "@shared/schema";
+export type TimeOfDay = "morning" | "afternoon" | "evening";
+export type TaperMode = 'taper_down' | 'taper_up' | 'taper_up_down' | 'flatline';
+export interface EveningProtectionSettings {
+  eveningProtectionEnabled: number;
+  eveningProtectionStartHour: number;
+  eveningProtectionMaxStim: number;
+}
+export function getTimeOfDay(): TimeOfDay {
+  const hour = new Date().getHours();
+  if (hour < 12) return "morning";
+  if (hour < 17) return "afternoon";
+  return "evening";
+}
+export function getAgeFromChild(birthMonth: number, birthYear: number): number {
+  const now = new Date();
+  let age = now.getFullYear() - birthYear;
+  if (now.getMonth() + 1 < birthMonth) {
+    age--;
+  }
+  return Math.max(0, age);
+}
+export function getEffectiveAge(child: Child): number {
+  const actualAge = getAgeFromChild(child.birthMonth, child.birthYear);
+  if (actualAge < 3 && child.ageRestrictionOverride === 3) {
+    return 3;
+  }
+  return actualAge;
+}
+export function getMaxStimulationForTimeOfDay(timeOfDay: TimeOfDay, eveningSettings?: EveningProtectionSettings): number {
+  if (eveningSettings && eveningSettings.eveningProtectionEnabled === 1) {
+    const currentHour = new Date().getHours();
+    if (currentHour >= eveningSettings.eveningProtectionStartHour) {
+      return eveningSettings.eveningProtectionMaxStim;
+    }
+  }
+  return 5;
+}
+export function isVideoAvailableInRegion(
+  regionRestriction: { allowed?: string[]; blocked?: string[] } | null | undefined,
+  countryCode: string | null | undefined
+): boolean {
+  if (!regionRestriction || !countryCode) return true;
+  if (regionRestriction.allowed && regionRestriction.allowed.length > 0) {
+    return regionRestriction.allowed.includes(countryCode);
+  }
+  if (regionRestriction.blocked && regionRestriction.blocked.length > 0) {
+    return !regionRestriction.blocked.includes(countryCode);
+  }
+  return true;
+}
+export function fisherYatesShuffle<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+export function getSeriesKey(v: { seriesId?: string | number | null; channelId?: string | number | null; youtubeChannelId?: string | null; id?: string | number }): string {
+  return v.seriesId
+    ? `series:${v.seriesId}`
+    : v.youtubeChannelId
+      ? `yt:${v.youtubeChannelId}`
+      : v.channelId
+        ? `channel:${v.channelId}`
+        : `v:${v.id}`;
+}
+export function seriesLevelShuffle<T extends { seriesId?: string | number | null; channelId?: string | number | null; youtubeChannelId?: string | null }>(
+  videos: T[],
+  boostedSeriesIds?: Set<string>,
+  boostedChannelIds?: Set<string>,
+  boostFactor: number = 4
+): T[] {
+  if (videos.length === 0) return [];
+  const groups = new Map<string, T[]>();
+  for (const video of videos) {
+    const key = video.seriesId
+      ? `series:${video.seriesId}`
+      : video.youtubeChannelId
+        ? `yt:${video.youtubeChannelId}`
+        : video.channelId
+          ? `channel:${video.channelId}`
+          : 'ungrouped';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(video);
+  }
+  const groupKeys = fisherYatesShuffle(Array.from(groups.keys()));
+  const shuffledGroups: T[][] = [];
+  for (const key of groupKeys) {
+    const group = fisherYatesShuffle(groups.get(key)!);
+    shuffledGroups.push(group);
+    const firstVideo = group[0];
+    const isBoosted = (boostedSeriesIds && firstVideo.seriesId && boostedSeriesIds.has(String(firstVideo.seriesId)))
+      || (boostedChannelIds && firstVideo.channelId && boostedChannelIds.has(String(firstVideo.channelId)));
+    if (isBoosted) {
+      for (let i = 1; i < boostFactor; i++) {
+        shuffledGroups.push(group);
+      }
+    }
+  }
+  const result: T[] = [];
+  let added = true;
+  let round = 0;
+  while (added) {
+    added = false;
+    for (const group of shuffledGroups) {
+      if (round < group.length) {
+        result.push(group[round]);
+        added = true;
+      }
+    }
+    round++;
+  }
+  return result;
+}
+export function buildPhasedPlaylist(
+  videos: Video[],
+  totalMinutes: number,
+  maxStim: number,
+  taperMode: TaperMode = 'taper_down',
+  flatlineLevel: number = 3,
+  _peakStartLevel: number = 2,
+  _peakPeakLevel: number = 4,
+  _peakEndLevel: number = 1,
+  _windDownStartLevel: number = 5,
+  _windDownEndLevel: number = 1,
+  _buildUpStartLevel: number = 1,
+  _buildUpEndLevel: number = 5,
+  boostedSeriesIds?: Set<string>,
+  boostedChannelIds?: Set<string>,
+  boostFactor: number = 4
+): Video[] {
+  let eligibleVideos: Video[];
+  if (taperMode === 'flatline') {
+    eligibleVideos = videos.filter(v => v.stimulationLevel >= Math.max(1, flatlineLevel - 1) && v.stimulationLevel <= Math.min(maxStim, flatlineLevel + 1));
+  } else {
+    eligibleVideos = videos.filter(v => v.stimulationLevel >= 1 && v.stimulationLevel <= maxStim);
+  }
+  if (eligibleVideos.length === 0) return [];
+  const showGroups = new Map<string, Video[]>();
+  for (const v of eligibleVideos) {
+    const key = getSeriesKey(v);
+    if (!showGroups.has(key)) showGroups.set(key, []);
+    showGroups.get(key)!.push(v);
+  }
+  for (const [key, vids] of showGroups) {
+    showGroups.set(key, fisherYatesShuffle(vids));
+  }
+  const totalSeconds = totalMinutes * 60;
+  const showKeys = Array.from(showGroups.keys());
+  const isShowBoosted = (key: string): boolean => {
+    const vids = showGroups.get(key);
+    if (!vids || vids.length === 0) return false;
+    const v = vids[0];
+    return !!(
+      (boostedSeriesIds && v.seriesId && boostedSeriesIds.has(String(v.seriesId)))
+      || (boostedChannelIds && v.channelId && boostedChannelIds.has(String(v.channelId)))
+    );
+  };
+  const weightedKeys: string[] = [];
+  for (const key of showKeys) {
+    const copies = isShowBoosted(key) ? boostFactor : 1;
+    for (let i = 0; i < copies; i++) {
+      weightedKeys.push(key);
+    }
+  }
+  const selectedShows = fisherYatesShuffle(weightedKeys);
+  const usedVideoIndices = new Map<string, number>();
+  const picked: Video[] = [];
+  let accumulatedTime = 0;
+  const usedVideoIds = new Set<string>();
+  for (const key of selectedShows) {
+    const vids = showGroups.get(key)!;
+    let idx = usedVideoIndices.get(key) ?? 0;
+    while (idx < vids.length && usedVideoIds.has(vids[idx].id)) {
+      idx++;
+    }
+    if (idx >= vids.length) continue;
+    const video = vids[idx];
+    usedVideoIds.add(video.id);
+    usedVideoIndices.set(key, idx + 1);
+    picked.push(video);
+    accumulatedTime += video.durationSeconds;
+    if (accumulatedTime >= totalSeconds) break;
+  }
+  switch (taperMode) {
+    case 'taper_down':
+      picked.sort((a, b) => b.stimulationLevel - a.stimulationLevel);
+      break;
+    case 'taper_up':
+      picked.sort((a, b) => a.stimulationLevel - b.stimulationLevel);
+      break;
+    case 'taper_up_down': {
+      picked.sort((a, b) => a.stimulationLevel - b.stimulationLevel);
+      const midpoint = Math.ceil(picked.length / 2);
+      const ascending = picked.slice(0, midpoint);
+      const descending = picked.slice(midpoint).sort((a, b) => b.stimulationLevel - a.stimulationLevel);
+      picked.length = 0;
+      picked.push(...ascending, ...descending);
+      break;
+    }
+    case 'flatline':
+      break;
+  }
+  return picked;
+}
+export function getCalmingVideos(
+  videos: Video[],
+  age: number,
+  userCountry?: string | null,
+  hiddenVideoIds?: Set<string>,
+  hiddenChannelIds?: Set<string>,
+  hiddenSeriesIds?: Set<string>,
+  dislikedVideoIds?: Set<string>
+): Video[] {
+  return videos.filter(v => {
+    if (v.isPublished !== 1) return false;
+    if (v.isEmbeddable === 0) return false;
+    if (v.stimulationLevel !== 0) return false;
+    const minAge = v.ageMin ?? 0;
+    const maxAge = v.ageMax ?? 18;
+    if (age < minAge || age > maxAge) return false;
+    if (!isVideoAvailableInRegion(v.regionRestriction as { allowed?: string[]; blocked?: string[] } | null, userCountry)) return false;
+    if (hiddenVideoIds?.has(v.id)) return false;
+    if (dislikedVideoIds?.has(v.id)) return false;
+    if (v.channelId && hiddenChannelIds?.has(v.channelId)) return false;
+    if (v.youtubeChannelId && hiddenChannelIds?.has(v.youtubeChannelId)) return false;
+    if (v.seriesId && hiddenSeriesIds?.has(v.seriesId)) return false;
+    return true;
+  });
+}
+export interface PlaylistRequest {
+  childIds: string[];
+  sessionMinutes: number;
+  taperMode: TaperMode;
+  flatlineLevel?: number;
+  usedVideoIds?: string[];
+}
+export interface PlaylistResult {
+  playlist: Video[];
+  calmingVideos: Video[];
+}
+export function buildServerPlaylist(
+  allVisibleVideos: Video[],
+  age: number,
+  sessionMinutes: number,
+  userCountry: string | null,
+  taperMode: TaperMode,
+  flatlineLevel: number,
+  eveningSettings: EveningProtectionSettings | undefined,
+  boostedSeriesIds: Set<string>,
+  boostedChannelIds: Set<string>,
+  boostFactor: number,
+  hiddenVideoIds: Set<string>,
+  hiddenChannelIds: Set<string>,
+  hiddenSeriesIds: Set<string>,
+  dislikedVideoIds: Set<string>,
+  favouritesAgeBypass: boolean,
+  usedVideoIds: Set<string> = new Set()
+): PlaylistResult {
+  const timeOfDay = getTimeOfDay();
+  const maxStim = getMaxStimulationForTimeOfDay(timeOfDay, eveningSettings);
+  const eligibleVideos = allVisibleVideos.filter(v => {
+    if (usedVideoIds.has(v.id)) return false;
+    if (v.isPublished !== 1) return false;
+    if (v.isEmbeddable === 0) return false;
+    const minAge = v.ageMin ?? 0;
+    const maxAge = v.ageMax ?? 18;
+    if (age < minAge || age > maxAge) {
+      if (favouritesAgeBypass) {
+        const isFavouritedShow = (v.seriesId && boostedSeriesIds.has(v.seriesId)) ||
+          (v.channelId && boostedChannelIds.has(v.channelId));
+        if (!isFavouritedShow) return false;
+      } else {
+        return false;
+      }
+    }
+    if (!isVideoAvailableInRegion(v.regionRestriction as { allowed?: string[]; blocked?: string[] } | null, userCountry)) return false;
+    if (hiddenVideoIds.has(v.id)) return false;
+    if (dislikedVideoIds.has(v.id)) return false;
+    if (v.channelId && hiddenChannelIds.has(v.channelId)) return false;
+    if (v.youtubeChannelId && hiddenChannelIds.has(v.youtubeChannelId)) return false;
+    if (v.seriesId && hiddenSeriesIds.has(v.seriesId)) return false;
+    return true;
+  });
+  const shuffledVideos = seriesLevelShuffle(eligibleVideos, boostedSeriesIds, boostedChannelIds, boostFactor);
+  let playlist = buildPhasedPlaylist(
+    shuffledVideos, sessionMinutes, maxStim, taperMode, flatlineLevel,
+    2, 4, 1, 5, 1, 1, 5,
+    boostedSeriesIds, boostedChannelIds, boostFactor
+  );
+  if (playlist.length === 0) {
+    const calmingFallback = shuffledVideos.filter(v => v.stimulationLevel === 0);
+    let timeRemaining = sessionMinutes * 60;
+    for (const video of calmingFallback) {
+      if (timeRemaining <= 0) break;
+      if (video.durationSeconds <= timeRemaining || playlist.length === 0) {
+        playlist.push(video);
+        timeRemaining -= video.durationSeconds;
+      }
+    }
+  }
+  const calmingVideos = getCalmingVideos(
+    allVisibleVideos, age, userCountry,
+    hiddenVideoIds, hiddenChannelIds, hiddenSeriesIds, dislikedVideoIds
+  );
+  const shuffledCalming = seriesLevelShuffle(calmingVideos);
+  const playlistVideoIds = new Set(playlist.map(v => v.id));
+  const replacementCandidates: Record<number, Video[]> = {};
+  for (const v of shuffledVideos) {
+    if (playlistVideoIds.has(v.id)) continue;
+    const stim = v.stimulationLevel ?? 3;
+    if (stim < 1) continue;
+    if (!replacementCandidates[stim]) replacementCandidates[stim] = [];
+    if (replacementCandidates[stim].length < 5) {
+      replacementCandidates[stim].push(v);
+    }
+  }
+  return { playlist, calmingVideos: shuffledCalming.slice(0, 5), replacementCandidates };
+}
+export interface ReplaceRequest {
+  currentPlaylistVideoIds: string[];
+  replaceIndex: number;
+  taperMode: TaperMode;
+}
+export function findReplacementVideo(
+  allVisibleVideos: Video[],
+  currentPlaylist: Video[],
+  replaceIndex: number,
+  age: number,
+  userCountry: string | null,
+  taperMode: TaperMode,
+  boostedSeriesIds: Set<string>,
+  boostedChannelIds: Set<string>,
+  hiddenVideoIds: Set<string>,
+  hiddenChannelIds: Set<string>,
+  hiddenSeriesIds: Set<string>,
+  dislikedVideoIds: Set<string>,
+  favouritesAgeBypass: boolean
+): Video | null {
+  const currentVideo = currentPlaylist[replaceIndex];
+  if (!currentVideo) return null;
+  const currentStim = currentVideo.stimulationLevel;
+  const playlistShowKeys = new Set(currentPlaylist.map(v => getSeriesKey(v)));
+  const currentShowKey = getSeriesKey(currentVideo);
+  playlistShowKeys.delete(currentShowKey);
+  const baseFilter = (v: Video) => {
+    if (v.id === currentVideo.id) return false;
+    if (currentPlaylist.some(pv => pv.id === v.id)) return false;
+    if (v.isPublished !== 1) return false;
+    if (v.isEmbeddable === 0) return false;
+    const minAge = v.ageMin ?? 0;
+    const maxAge = v.ageMax ?? 18;
+    if (age < minAge || age > maxAge) {
+      if (favouritesAgeBypass) {
+        const isFavouritedShow = (v.seriesId && boostedSeriesIds.has(v.seriesId)) ||
+          (v.channelId && boostedChannelIds.has(v.channelId));
+        if (!isFavouritedShow) return false;
+      } else {
+        return false;
+      }
+    }
+    if (!isVideoAvailableInRegion(v.regionRestriction as { allowed?: string[]; blocked?: string[] } | null, userCountry)) return false;
+    if (hiddenVideoIds.has(v.id)) return false;
+    if (dislikedVideoIds.has(v.id)) return false;
+    if (v.channelId && hiddenChannelIds.has(v.channelId)) return false;
+    if (v.youtubeChannelId && hiddenChannelIds.has(v.youtubeChannelId)) return false;
+    if (v.seriesId && hiddenSeriesIds.has(v.seriesId)) return false;
+    if (playlistShowKeys.has(getSeriesKey(v))) return false;
+    return true;
+  };
+  const regularVideos = allVisibleVideos.filter(v => {
+    if (!baseFilter(v)) return false;
+    if (v.stimulationLevel < 1 || v.stimulationLevel > 5) return false;
+    return true;
+  });
+  const prevStim = replaceIndex > 0 ? currentPlaylist[replaceIndex - 1].stimulationLevel : null;
+  const nextStim = replaceIndex < currentPlaylist.length - 1 ? currentPlaylist[replaceIndex + 1].stimulationLevel : null;
+  let minStim = Math.max(1, currentStim - 1);
+  let maxStimAllowed = Math.min(5, currentStim + 1);
+  if (taperMode === 'taper_down') {
+    if (prevStim !== null) maxStimAllowed = Math.min(maxStimAllowed, prevStim);
+    if (nextStim !== null && nextStim > 0) minStim = Math.max(1, nextStim);
+  } else if (taperMode === 'taper_up') {
+    if (prevStim !== null) minStim = Math.max(minStim, prevStim);
+    if (nextStim !== null) maxStimAllowed = Math.min(maxStimAllowed, nextStim);
+  } else if (taperMode === 'taper_up_down') {
+    let peakIdx = 0;
+    let peakVal = 0;
+    currentPlaylist.forEach((v, i) => {
+      if (v.stimulationLevel > peakVal) { peakVal = v.stimulationLevel; peakIdx = i; }
+    });
+    if (replaceIndex <= peakIdx) {
+      if (prevStim !== null) minStim = Math.max(minStim, prevStim);
+      if (nextStim !== null) maxStimAllowed = Math.min(maxStimAllowed, nextStim + 1);
+    } else {
+      if (prevStim !== null) maxStimAllowed = Math.min(maxStimAllowed, prevStim);
+      if (nextStim !== null && nextStim > 0) minStim = Math.max(1, nextStim);
+    }
+  }
+  if (minStim > maxStimAllowed) {
+    minStim = currentStim;
+    maxStimAllowed = currentStim;
+  }
+  const isInStimRange = (v: Video) => v.stimulationLevel >= minStim && v.stimulationLevel <= maxStimAllowed;
+  let candidates = regularVideos.filter(v => isInStimRange(v));
+  if (candidates.length === 0) {
+    candidates = regularVideos;
+  }
+  if (candidates.length === 0) {
+    const sameShowFallback = allVisibleVideos.filter(v => {
+      if (v.id === currentVideo.id) return false;
+      if (currentPlaylist.some(pv => pv.id === v.id)) return false;
+      if (v.isPublished !== 1 || v.isEmbeddable === 0) return false;
+      const minAge = v.ageMin ?? 0;
+      const maxAge = v.ageMax ?? 18;
+      if (age < minAge || age > maxAge) return false;
+      if (!isVideoAvailableInRegion(v.regionRestriction as { allowed?: string[]; blocked?: string[] } | null, userCountry)) return false;
+      if (v.stimulationLevel < 1 || v.stimulationLevel > 5) return false;
+      return getSeriesKey(v) === currentShowKey;
+    });
+    if (sameShowFallback.length > 0) {
+      candidates = sameShowFallback;
+    } else {
+      return null;
+    }
+  }
+  const showGroups = new Map<string, Video[]>();
+  for (const v of candidates) {
+    const key = getSeriesKey(v);
+    if (!showGroups.has(key)) showGroups.set(key, []);
+    showGroups.get(key)!.push(v);
+  }
+  const showKeysList = Array.from(showGroups.keys());
+  const chosenShowKey = showKeysList[Math.floor(Math.random() * showKeysList.length)];
+  const showVids = showGroups.get(chosenShowKey)!;
+  return showVids[Math.floor(Math.random() * showVids.length)];
+}
+export function findReplacementCalmingVideo(
+  allVisibleVideos: Video[],
+  currentCalmingVideoId: string,
+  age: number,
+  userCountry: string | null,
+  hiddenVideoIds: Set<string>,
+  hiddenChannelIds: Set<string>,
+  hiddenSeriesIds: Set<string>,
+  dislikedVideoIds: Set<string>
+): Video[] {
+  const calming = getCalmingVideos(
+    allVisibleVideos, age, userCountry,
+    hiddenVideoIds, hiddenChannelIds, hiddenSeriesIds, dislikedVideoIds
+  ).filter(v => v.id !== currentCalmingVideoId);
+  return seriesLevelShuffle(calming);
+}
+File 2: shared/schema.ts — Videos table definition (the key part)
+export const videos = pgTable("videos", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  youtubeVideoId: text("youtube_video_id").notNull().unique(),
+  channelId: varchar("channel_id").references(() => channels.id, { onDelete: "cascade" }),
+  seriesId: varchar("series_id").references(() => series.id, { onDelete: "set null" }),
+  title: text("title").notNull(),
+  description: text("description"),
+  stimulationLevel: integer("stimulation_level").notNull(), // 0 = calming/wind-down, 1-5 = entertainment
+  themes: text("themes").array().notNull().default(sql`ARRAY[]::text[]`),
+  ageMin: integer("age_min"),
+  ageMax: integer("age_max"),
+  durationSeconds: integer("duration_seconds").notNull(),
+  thumbnailUrl: text("thumbnail_url").notNull(),
+  customThumbnailUrl: text("custom_thumbnail_url"),
+  series: text("series"), // Optional series name string
+  isPublished: integer("is_published").notNull().default(1), // 1 = visible, 0 = hidden
+  addedByUserId: varchar("added_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  youtubeChannelId: text("youtube_channel_id"),
+  youtubeChannelTitle: text("youtube_channel_title"),
+  publishedAt: text("published_at"),
+  tags: text("tags").array().default(sql`ARRAY[]::text[]`),
+  youtubeRawData: jsonb("youtube_raw_data"),
+  regionRestriction: jsonb("region_restriction"), // { allowed?: string[], blocked?: string[] }
+  isEmbeddable: integer("is_embeddable").default(1), // 1 = yes, 0 = no, null = unchecked
+  embeddableCheckedAt: timestamp("embeddable_checked_at"),
+  isHidden: integer("is_hidden").default(0), // 1 = admin-hidden (embed issues), 0 = visible
+  definition: text("definition"), // "sd" or "hd"
+  contentSource: text("content_source").default("youtube"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+Key distinction for wind-down vs entertainment: There is NO separate isWindDown flag or content type. It is determined entirely by stimulationLevel:
+
+stimulationLevel === 0 → calming/wind-down video
+stimulationLevel >= 1 && <= 5 → entertainment video
+File 3: Route handlers for playlist, replace, and replace-calming
+// POST /api/sessions/playlist
+app.post("/api/sessions/playlist", authenticateUser, async (req, res) => {
+  const user = await storage.getUserByFirebaseUid(req.user.uid);
+  const { childIds, sessionMinutes, taperMode, flatlineLevel, usedVideoIds } = req.body;
+  const childrenResults = await Promise.all(childIds.map(id => storage.getChild(id)));
+  const validChildren = childrenResults.filter(c => c && c.userId === getOwnerId(user));
+  const ages = validChildren.map(c => getEffectiveAge(c));
+  const youngestAge = Math.min(...ages);
+  const effectiveOwnerId = getOwnerId(user);
+  const [visibleVideos, showSubs, hiddenItems] = await Promise.all([
+    getVisibleVideosForPlaylist(),
+    storage.getUserShowSubscriptions(effectiveOwnerId),
+    storage.getHiddenContentByUserId(effectiveOwnerId),
+  ]);
+  const reactionResults = await Promise.all(
+    validChildren.map(c => storage.getVideoReactionsByChildId(c.id))
+  );
+  const allReactions = reactionResults.flat();
+  // Build boosted/hidden/disliked sets from DB data
+  const boostedSeriesIds = new Set();
+  const boostedChannelIds = new Set();
+  for (const sub of showSubs) {
+    if (sub.seriesId) boostedSeriesIds.add(sub.seriesId);
+    if (sub.channelId) boostedChannelIds.add(sub.channelId);
+  }
+  const hiddenVideoIds = new Set();
+  const hiddenChannelIds = new Set();
+  const hiddenSeriesIds = new Set();
+  for (const h of hiddenItems) {
+    if (h.targetType === 'video') hiddenVideoIds.add(h.targetId);
+    else if (h.targetType === 'channel') hiddenChannelIds.add(h.targetId);
+    else if (h.targetType === 'series') hiddenSeriesIds.add(h.targetId);
+  }
+  const dislikedVideoIds = new Set();
+  for (const r of allReactions) {
+    if (r.reaction === 'dislike') dislikedVideoIds.add(r.videoId);
+  }
+  const primaryChild = validChildren[0];
+  const favouritesAgeBypass = primaryChild.favouritesAgeBypass === 1;
+  const boostFactor = user.favouriteBoostLevel ?? 4;
+  const eveningSettings = {
+    eveningProtectionEnabled: user.eveningProtectionEnabled,
+    eveningProtectionStartHour: user.eveningProtectionStartHour,
+    eveningProtectionMaxStim: user.eveningProtectionMaxStim,
+  };
+  const result = buildServerPlaylist(
+    visibleVideos, youngestAge, sessionMinutes, user.country || null,
+    taperMode || 'taper_down', flatlineLevel ?? primaryChild.defaultFlatlineLevel ?? 3,
+    eveningSettings, boostedSeriesIds, boostedChannelIds, boostFactor,
+    hiddenVideoIds, hiddenChannelIds, hiddenSeriesIds, dislikedVideoIds,
+    favouritesAgeBypass, new Set(usedVideoIds || [])
+  );
+  res.json(result);
+  // Response: { playlist: Video[], calmingVideos: Video[], replacementCandidates: Record<number, Video[]> }
+});
+// POST /api/sessions/playlist/replace
+app.post("/api/sessions/playlist/replace", authenticateUser, async (req, res) => {
+  const user = await storage.getUserByFirebaseUid(req.user.uid);
+  const { childIds, currentPlaylistVideoIds, replaceIndex, taperMode } = req.body;
+  // Same child validation + data fetching as above...
+  // Builds boosted/hidden/disliked sets identically
+  const videoMap = new Map(visibleVideos.map(v => [v.id, v]));
+  const currentPlaylist = currentPlaylistVideoIds
+    .map(id => videoMap.get(id))
+    .filter(v => v !== undefined);
+  const replacement = findReplacementVideo(
+    visibleVideos, currentPlaylist, replaceIndex, youngestAge,
+    user.country || null, taperMode || 'taper_down',
+    boostedSeriesIds, boostedChannelIds,
+    hiddenVideoIds, hiddenChannelIds, hiddenSeriesIds, dislikedVideoIds,
+    favouritesAgeBypass
+  );
+  if (!replacement) return res.status(404).json({ error: 'No replacement video found' });
+  const updatedPlaylist = [...currentPlaylist];
+  updatedPlaylist[replaceIndex] = replacement;
+  res.json({ video: replacement, playlist: updatedPlaylist });
+});
+// POST /api/sessions/playlist/replace-calming
+app.post("/api/sessions/playlist/replace-calming", authenticateUser, async (req, res) => {
+  const user = await storage.getUserByFirebaseUid(req.user.uid);
+  const { childIds, currentCalmingVideoId } = req.body;
+  // Same child validation + hidden/disliked sets...
+  const replacements = findReplacementCalmingVideo(
+    visibleVideos, currentCalmingVideoId || '', youngestAge,
+    user.country || null, hiddenVideoIds, hiddenChannelIds, hiddenSeriesIds, dislikedVideoIds
+  );
+  res.json({ calmingVideos: replacements.slice(0, 5) });
+});
+File 4: getVisibleVideosForPlaylist — pre-filter before playlist builder
+This runs before any playlist logic. It removes globally disabled channels/series and admin-hidden videos:
+
+async function getVisibleVideosForPlaylist(): Promise<Video[]> {
+  const [allVideos, allChannels, allSeries] = await Promise.all([
+    storage.getAllVideos(),
+    storage.getAllChannels(),
+    storage.getAllSeries(),
+  ]);
+  const disabledChannelIds = new Set(
+    allChannels.filter(c => c.isEnabled === 0).map(c => c.id)
+  );
+  const disabledSeriesIds = new Set(
+    allSeries.filter(s => s.isEnabled === 0).map(s => s.id)
+  );
+  const seriesNameMap = new Map(allSeries.map(s => [s.id, s.name]));
+  const visibleVideos = allVideos
+    .filter(v =>
+      v.isHidden !== 1 &&
+      !disabledChannelIds.has(v.channelId || '') &&
+      !(v.seriesId && disabledSeriesIds.has(v.seriesId))
+    )
+    .map(v => ({
+      ...v,
+      seriesName: v.seriesId ? seriesNameMap.get(v.seriesId) || null : null,
+    }));
+  return visibleVideos;
+}
+Summary of filtering layers:
+
+getVisibleVideosForPlaylist — removes admin-hidden videos (isHidden=1), disabled channels (isEnabled=0), disabled series (isEnabled=0)
+buildServerPlaylist eligibility filter — removes unpublished (isPublished≠1), non-embeddable (isEmbeddable=0), age-restricted (unless favourites bypass), region-restricted, parent-hidden, disliked videos
+buildPhasedPlaylist — filters by stim level based on taper mode, then sorts by energy pattern
+Calming = stimulationLevel === 0 — no special flag, just stim level 0
+Entertainment = stimulationLevel >= 1 — replacement pools and buildPhasedPlaylist both skip stim < 1
