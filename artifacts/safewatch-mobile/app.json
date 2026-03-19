@@ -39,7 +39,8 @@
           "androidReceiverAppId": "0F5E0B59"
         }
       ],
-      "./plugins/withCastFrameworkVersion"
+      "./plugins/withCastFrameworkVersion",
+      "@react-native-google-signin/google-signin"
     ],
     "experiments": {
       "typedRoutes": true,

@@ -15,7 +15,7 @@ import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "@/contexts/AuthContext";
-import { signInWithEmail, signUpWithEmail, signInWithGoogle } from "@/lib/auth";
+import { signInWithEmail, signUpWithEmail, signInWithGoogle, GoogleSignInStatusCodes } from "@/lib/auth";
 import { spacing, borderRadius } from "@/constants/colors";
 
 const DARK = {
@@ -116,13 +116,15 @@ export default function LoginScreen() {
       const idToken = await signInWithGoogle();
       await login(idToken);
     } catch (err: unknown) {
-      const firebaseErr = err as { code?: string; message?: string };
-      if (firebaseErr.code === "auth/popup-closed-by-user") {
+      const typedErr = err as { code?: string; message?: string };
+      if (typedErr.code === String(GoogleSignInStatusCodes.SIGN_IN_CANCELLED)) {
         setError(null);
-      } else if (firebaseErr.code === "auth/popup-blocked") {
-        setError("Pop-up was blocked. Please allow pop-ups and try again.");
+      } else if (typedErr.code === String(GoogleSignInStatusCodes.IN_PROGRESS)) {
+        setError(null);
+      } else if (typedErr.code === String(GoogleSignInStatusCodes.PLAY_SERVICES_NOT_AVAILABLE)) {
+        setError("Google Play Services is not available on this device.");
       } else {
-        setError(firebaseErr.message || "Google sign-in failed");
+        setError(typedErr.message || "Google sign-in failed");
       }
     } finally {
       setSubmitting(false);

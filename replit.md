@@ -80,7 +80,7 @@ Express 5 API server. Routes live in `src/routes/` and use `@workspace/api-zod` 
 
 Expo React Native companion app for SafeWatch — manages children's screen time with YouTube video playback.
 
-- **Auth**: Firebase email/password + Google Sign-In (Google requires dev client build)
+- **Auth**: Firebase email/password + native Google Sign-In via `@react-native-google-signin/google-signin` (requires dev/preview build with SHA-1 fingerprint registered in Firebase console)
 - **Navigation**: expo-router with stack navigation (no tabs)
 - **Screens**: Login → Start Viewing Session (combined child selection + session config) → Playlist Preview → Player → Feedback
 - **YouTube**: react-native-youtube-iframe for embedded playback
@@ -108,6 +108,7 @@ Expo React Native companion app for SafeWatch — manages children's screen time
 - `EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN` — Firebase auth domain
 - `EXPO_PUBLIC_FIREBASE_PROJECT_ID` — Firebase project ID
 - `EXPO_PUBLIC_DOMAIN` — auto-set to `REPLIT_DEV_DOMAIN` for API calls
+- `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` — Google OAuth web client ID (from Firebase console, needed for native Google Sign-In)
 - `EXPO_PUBLIC_CAST_APP_ID` — Google Cast Developer Console App ID for custom Chromecast receiver (set to registered receiver ID)
 
 #### Environment Variables (Backend)

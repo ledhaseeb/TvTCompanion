@@ -5,13 +5,16 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signInWithCredential,
-  signInWithPopup,
   GoogleAuthProvider,
   onIdTokenChanged,
   signOut as firebaseSignOut,
   type Auth,
   type User,
 } from "firebase/auth";
+import {
+  GoogleSignin,
+  statusCodes,
+} from "@react-native-google-signin/google-signin";
 
 const AUTH_TOKEN_KEY = "firebase_id_token";
 const USER_ROLE_KEY = "user_role";
@@ -83,13 +86,31 @@ export async function signInWithGoogleToken(
   return idToken;
 }
 
+let googleSignInConfigured = false;
+
+function ensureGoogleSignInConfigured() {
+  if (googleSignInConfigured) return;
+  const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+  if (!webClientId) {
+    throw new Error(
+      "Google Sign-In is not configured. Set EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID.",
+    );
+  }
+  GoogleSignin.configure({ webClientId });
+  googleSignInConfigured = true;
+}
+
+export { statusCodes as GoogleSignInStatusCodes };
+
 export async function signInWithGoogle(): Promise<string> {
-  const auth = getFirebaseAuth();
-  const provider = new GoogleAuthProvider();
-  const result = await signInWithPopup(auth, provider);
-  const idToken = await result.user.getIdToken();
-  await setAuthToken(idToken);
-  return idToken;
+  ensureGoogleSignInConfigured();
+  await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+  const response = await GoogleSignin.signIn();
+  const googleIdToken = response.data?.idToken;
+  if (!googleIdToken) {
+    throw new Error("No ID token returned from Google Sign-In");
+  }
+  return signInWithGoogleToken(googleIdToken);
 }
 
 export function onTokenRefresh(
