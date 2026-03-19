@@ -63,7 +63,7 @@ export default function PlayerScreen() {
     NativeCastButton,
   } = useCast();
 
-  const [playing, setPlaying] = useState(true);
+  const [playing, setPlaying] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [ready, setReady] = useState(false);
   const [castVolume, setCastVolume] = useState(100);
@@ -72,12 +72,18 @@ export default function PlayerScreen() {
   const [castVideoTitle, setCastVideoTitle] = useState<string | null>(null);
   const [castVideoIndex, setCastVideoIndex] = useState(0);
   const [castTotalVideos, setCastTotalVideos] = useState(0);
-  const watchStartRef = useRef(Date.now());
-  const totalWatchedRef = useRef(0);
+
+  const playStartRef = useRef<number | null>(null);
+  const sessionWatchedRef = useRef(0);
+  const videoWatchedRef = useRef(0);
   const justAdvancedRef = useRef(false);
   const castPlaylistSentRef = useRef(false);
   const castElapsedRef = useRef(0);
   const castPlaylistRef = useRef<typeof session.playlist>([]);
+  const preCastWatchedRef = useRef(0);
+  const lastCastVideoIndexRef = useRef(0);
+  const castVideoCurrentTimeRef = useRef(0);
+  const recordedVideoEndRef = useRef<string | null>(null);
 
   const { width: screenWidth } = Dimensions.get("window");
   const playerHeight = Math.round((screenWidth * 9) / 16);
@@ -105,21 +111,32 @@ export default function PlayerScreen() {
 
   const sessionTotalSeconds = session.sessionMinutes * 60;
 
+  const markPlayStart = useCallback(() => {
+    if (playStartRef.current === null) {
+      playStartRef.current = Date.now();
+    }
+  }, []);
+
+  const accumulatePlayTime = useCallback(() => {
+    if (playStartRef.current !== null) {
+      const delta = Math.floor((Date.now() - playStartRef.current) / 1000);
+      sessionWatchedRef.current += delta;
+      videoWatchedRef.current += delta;
+      playStartRef.current = null;
+    }
+  }, []);
+
   useEffect(() => {
     if (isCasting) return;
-    if (!playing) return;
     const interval = setInterval(() => {
-      const now = Date.now();
-      const totalSeconds =
-        totalWatchedRef.current +
-        Math.floor((now - watchStartRef.current) / 1000);
-      setElapsed(totalSeconds);
-      updateWatchTime(totalSeconds);
+      let total = sessionWatchedRef.current;
+      if (playing && playStartRef.current !== null) {
+        total += Math.floor((Date.now() - playStartRef.current) / 1000);
+      }
+      setElapsed(total);
+      updateWatchTime(total);
 
-      if (
-        session.finishMode === "hard" &&
-        totalSeconds >= sessionTotalSeconds
-      ) {
+      if (session.finishMode === "hard" && total >= sessionTotalSeconds) {
         handleSessionEnd();
       }
     }, 1000);
@@ -129,6 +146,13 @@ export default function PlayerScreen() {
   useEffect(() => {
     console.log("[Player] Cast effect check - isCasting:", isCasting, "isActive:", session.isActive, "playlistLen:", session.playlist.length, "alreadySent:", castPlaylistSentRef.current);
     if (isCasting && session.isActive && session.playlist.length > 0 && !castPlaylistSentRef.current) {
+      accumulatePlayTime();
+      preCastWatchedRef.current = sessionWatchedRef.current;
+      videoWatchedRef.current = 0;
+      castVideoCurrentTimeRef.current = 0;
+      lastCastVideoIndexRef.current = session.currentIndex;
+      recordedVideoEndRef.current = null;
+
       castPlaylistSentRef.current = true;
       let fullPlaylist = [...session.playlist];
       if (session.includeWindDown && session.calmingVideos && session.calmingVideos.length > 0) {
@@ -146,10 +170,13 @@ export default function PlayerScreen() {
 
   useEffect(() => {
     if (!isCasting && wasCastingRef.current) {
-      totalWatchedRef.current = castElapsedRef.current;
-      watchStartRef.current = Date.now();
-      setElapsed(castElapsedRef.current);
+      const mergedTotal = preCastWatchedRef.current + castElapsedRef.current;
+      sessionWatchedRef.current = mergedTotal;
+      videoWatchedRef.current = 0;
+      playStartRef.current = null;
+      setElapsed(mergedTotal);
       setPlaying(true);
+      markPlayStart();
     }
     wasCastingRef.current = isCasting;
 
@@ -172,27 +199,46 @@ export default function PlayerScreen() {
             setCastVideoTitle(status.currentVideoTitle);
           }
           castElapsedRef.current = status.elapsedSeconds;
-          setElapsed(status.elapsedSeconds);
-          updateWatchTime(status.elapsedSeconds);
+          setElapsed(preCastWatchedRef.current + status.elapsedSeconds);
+          updateWatchTime(preCastWatchedRef.current + status.elapsedSeconds);
           if (status.videoCurrentTime !== undefined) {
             setVideoCurrentTime(status.videoCurrentTime);
+            castVideoCurrentTimeRef.current = status.videoCurrentTime;
           }
           if (status.videoDuration !== undefined) {
             setVideoDuration(status.videoDuration);
           }
 
+          if (status.currentIndex !== lastCastVideoIndexRef.current) {
+            lastCastVideoIndexRef.current = status.currentIndex;
+            castVideoCurrentTimeRef.current = 0;
+            recordedVideoEndRef.current = null;
+          }
+
           if (
             session.finishMode === "hard" &&
-            status.elapsedSeconds >= sessionTotalSeconds
+            (preCastWatchedRef.current + status.elapsedSeconds) >= sessionTotalSeconds
           ) {
             handleSessionEnd();
           }
           break;
         }
 
-        case "VIDEO_ENDED":
-          recordWatchHistory();
+        case "VIDEO_ENDED": {
+          const endedIndex = (msg as any).index ?? castVideoIndex;
+          const endedVideo = castPlaylistRef.current[endedIndex];
+          if (endedVideo) {
+            const videoId = endedVideo.youtubeId || extractYoutubeIdFromThumbnail(endedVideo.thumbnailUrl) || "";
+            const dedupKey = `${session.sessionId}-${videoId}-${endedIndex}`;
+            if (recordedVideoEndRef.current !== dedupKey) {
+              recordedVideoEndRef.current = dedupKey;
+              const watchedSecs = Math.max(Math.floor(castVideoCurrentTimeRef.current), 1);
+              submitWatchHistory(videoId, watchedSecs, endedVideo.stimulationLevel);
+            }
+          }
+          castVideoCurrentTimeRef.current = 0;
           break;
+        }
 
         case "VIDEO_ERROR":
           console.warn("[Cast] Video error on receiver:", msg);
@@ -208,29 +254,31 @@ export default function PlayerScreen() {
     });
 
     return unsubscribe;
-  }, [isCasting, session.currentIndex, session.finishMode, sessionTotalSeconds]);
+  }, [isCasting, session.currentIndex, session.finishMode, sessionTotalSeconds, castVideoIndex]);
 
   const handleStateChange = useCallback(
     (state: string) => {
       if (state === "ended") {
+        accumulatePlayTime();
         justAdvancedRef.current = true;
-        recordWatchHistory();
+        recordLocalWatchHistory();
+        videoWatchedRef.current = 0;
         advanceVideo();
       } else if (state === "paused") {
         if (justAdvancedRef.current) {
           return;
         }
-        totalWatchedRef.current += Math.floor((Date.now() - watchStartRef.current) / 1000);
+        accumulatePlayTime();
         setPlaying(false);
       } else if (state === "playing") {
         justAdvancedRef.current = false;
-        watchStartRef.current = Date.now();
         setPlaying(true);
+        markPlayStart();
       } else if (state === "buffering" || state === "video cued") {
         justAdvancedRef.current = false;
       }
     },
-    [currentVideo, session.sessionId],
+    [currentVideo, session.sessionId, accumulatePlayTime, markPlayStart],
   );
 
   const handlePlayerError = useCallback(
@@ -250,37 +298,51 @@ export default function PlayerScreen() {
     [currentVideo, advanceVideo],
   );
 
-  const recordWatchHistory = async () => {
-    if (!currentVideo || !session.sessionId) return;
+  const submitWatchHistory = async (videoId: string, watchedSeconds: number, stimulationLevel: number) => {
+    if (!session.sessionId || !videoId || watchedSeconds <= 0) return;
     try {
       await apiRequest("POST", "/api/watch-history", {
-        videoId: currentVideo.youtubeId,
+        videoId,
         childIds: session.childIds,
         sessionId: session.sessionId,
-        durationSeconds: currentVideo.durationSeconds,
-        stimulationLevel: currentVideo.stimulationLevel,
+        durationSeconds: watchedSeconds,
+        stimulationLevel,
       });
     } catch {}
   };
 
-  const handleSessionEnd = useCallback(async () => {
-    const curVideo = session.playlist[session.currentIndex];
-    if (curVideo && session.sessionId) {
-      try {
-        await apiRequest("POST", "/api/watch-history", {
-          videoId: curVideo.youtubeId || extractYoutubeIdFromThumbnail(curVideo.thumbnailUrl) || "",
-          childIds: session.childIds,
-          sessionId: session.sessionId,
-          durationSeconds: curVideo.durationSeconds,
-          stimulationLevel: curVideo.stimulationLevel,
-        });
-      } catch {}
+  const recordLocalWatchHistory = () => {
+    if (!currentVideo || !session.sessionId) return;
+    let actualWatched = videoWatchedRef.current;
+    if (playing && playStartRef.current !== null) {
+      actualWatched += Math.floor((Date.now() - playStartRef.current) / 1000);
     }
+    submitWatchHistory(currentVideo.youtubeId, actualWatched, currentVideo.stimulationLevel);
+  };
+
+  const handleSessionEnd = useCallback(async () => {
     if (isCasting) {
+      const curCastVideo = castPlaylistRef.current[castVideoIndex];
+      if (curCastVideo && session.sessionId) {
+        const videoId = curCastVideo.youtubeId || extractYoutubeIdFromThumbnail(curCastVideo.thumbnailUrl) || "";
+        const watchedSecs = Math.max(Math.floor(castVideoCurrentTimeRef.current), 0);
+        if (watchedSecs > 0) {
+          await submitWatchHistory(videoId, watchedSecs, curCastVideo.stimulationLevel);
+        }
+      }
       try { await stopMedia(); } catch {}
+    } else {
+      accumulatePlayTime();
+      const curVideo = session.playlist[session.currentIndex];
+      if (curVideo && session.sessionId) {
+        const actualWatched = videoWatchedRef.current;
+        if (actualWatched > 0) {
+          const videoId = curVideo.youtubeId || extractYoutubeIdFromThumbnail(curVideo.thumbnailUrl) || "";
+          await submitWatchHistory(videoId, actualWatched, curVideo.stimulationLevel);
+        }
+      }
     }
     await endSession();
-    // @ts-expect-error -- expo-router typed routes don't cover dynamic params
     router.replace({
       pathname: FEEDBACK_PATH,
       params: {
@@ -288,8 +350,8 @@ export default function PlayerScreen() {
         childIds: session.childIds.join(","),
         childNames: session.childNames.join(","),
       },
-    });
-  }, [session.sessionId, session.childIds, session.childNames, session.playlist, session.currentIndex, isCasting, stopMedia, endSession, router]);
+    } as never);
+  }, [session.sessionId, session.childIds, session.childNames, session.playlist, session.currentIndex, isCasting, stopMedia, endSession, router, accumulatePlayTime, castVideoIndex]);
 
   const handleEndPress = () => {
     Alert.alert("End Session", "Are you sure you want to end this session?", [
@@ -299,10 +361,19 @@ export default function PlayerScreen() {
   };
 
   const handleSkip = () => {
-    recordWatchHistory();
     if (isCasting) {
+      const curCastVideo = castPlaylistRef.current[castVideoIndex];
+      if (curCastVideo) {
+        const videoId = curCastVideo.youtubeId || extractYoutubeIdFromThumbnail(curCastVideo.thumbnailUrl) || "";
+        const watchedSecs = Math.max(Math.floor(castVideoCurrentTimeRef.current), 1);
+        submitWatchHistory(videoId, watchedSecs, curCastVideo.stimulationLevel);
+      }
+      castVideoCurrentTimeRef.current = 0;
       skipVideo();
     } else {
+      accumulatePlayTime();
+      recordLocalWatchHistory();
+      videoWatchedRef.current = 0;
       advanceVideo();
     }
   };
@@ -325,7 +396,6 @@ export default function PlayerScreen() {
 
   useEffect(() => {
     if (!session.isActive && session.sessionId && !isCasting) {
-      // @ts-expect-error -- expo-router typed routes don't cover dynamic params
       router.replace({
         pathname: FEEDBACK_PATH,
         params: {
@@ -333,7 +403,7 @@ export default function PlayerScreen() {
           childIds: session.childIds.join(","),
           childNames: session.childNames.join(","),
         },
-      });
+      } as never);
     }
   }, [session.isActive, session.sessionId, isCasting]);
 
@@ -375,7 +445,7 @@ export default function PlayerScreen() {
       <StatusBar hidden />
       <View style={styles.centeredContent}>
       <View style={styles.playerArea}>
-        {!isCasting && (
+        {!isCasting && currentVideo && (
           <YoutubePlayer
             key={currentVideo.youtubeId}
             height={playerHeight}
