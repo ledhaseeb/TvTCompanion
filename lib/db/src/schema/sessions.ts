@@ -9,14 +9,17 @@ export const sessionsTable = pgTable("sessions", {
   childIds: text("child_ids").array().notNull(),
   startTime: timestamp("start_time", { withTimezone: true }).notNull().defaultNow(),
   endTime: timestamp("end_time", { withTimezone: true }),
+  totalDurationSeconds: integer("total_duration_seconds").notNull().default(0),
   totalMinutesWatched: numeric("total_minutes_watched").notNull().default("0"),
   status: varchar("status", { length: 50 }).notNull().default("active"),
   taperMode: varchar("taper_mode", { length: 50 }).notNull(),
   flatlineLevel: integer("flatline_level").notNull().default(3),
   includeWindDown: integer("include_wind_down").notNull().default(1),
   finishMode: varchar("finish_mode", { length: 50 }).notNull().default("soft"),
+  feedbackRequired: integer("feedback_required").notNull().default(1),
+  feedbackCompletedAt: timestamp("feedback_completed_at", { withTimezone: true }),
 });
 
-export const insertSessionSchema = createInsertSchema(sessionsTable).omit({ id: true, startTime: true, status: true, totalMinutesWatched: true });
+export const insertSessionSchema = createInsertSchema(sessionsTable).omit({ id: true, startTime: true, status: true, totalDurationSeconds: true, totalMinutesWatched: true });
 export type InsertSession = z.infer<typeof insertSessionSchema>;
 export type Session = typeof sessionsTable.$inferSelect;

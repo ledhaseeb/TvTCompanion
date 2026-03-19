@@ -6,6 +6,11 @@ import { sessionsTable } from "./sessions";
 export const sessionFeedbackTable = pgTable("session_feedback", {
   id: uuid("id").primaryKey().defaultRandom(),
   sessionId: uuid("session_id").notNull().references(() => sessionsTable.id),
+  childId: uuid("child_id"),
+  behaviorRating: varchar("behavior_rating", { length: 50 }),
+  wasOverride: integer("was_override").notNull().default(0),
+  timeOfDay: varchar("time_of_day", { length: 20 }),
+  totalMinutesWatched: integer("total_minutes_watched"),
   skipped: boolean("skipped").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

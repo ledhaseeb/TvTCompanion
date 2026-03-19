@@ -68,11 +68,13 @@ Express 5 API server. Routes live in `src/routes/` and use `@workspace/api-zod` 
 
 - `GET/POST /api/users/me` — get or create user profile (Firebase auth required)
 - `GET /api/children` — list children for the authenticated user
-- `POST /api/sessions/playlist` — generate a playlist based on session config
-- `POST /api/sessions` — create a new viewing session
-- `PATCH /api/sessions/:id` — update/end a session
+- `POST /api/sessions/playlist` — generate a playlist (calming=stim 0, entertainment=stim 1-5, filters out isEmbeddable=0, series-level shuffle)
+- `POST /api/sessions/playlist/replace` — replace a video at a given index (taper-mode-aware stim range, series diversity)
+- `POST /api/sessions/playlist/replace-calming` — replace the wind-down video
+- `POST /api/sessions` — create a new viewing session (supports 409 conflict detection + force override, caregiver ownership via getOwnerId)
+- `PATCH /api/sessions/:id` — update/end a session (stores totalDurationSeconds + totalMinutesWatched, supports feedbackRequired/feedbackCompletedAt)
 - `POST /api/watch-history` — record a video watch entry
-- `POST /api/feedback/:sessionId/complete` — submit post-session behavior feedback
+- `POST /api/feedback/:sessionId/complete` — submit post-session behavior feedback (per-child rows in session_feedback with behaviorRating, timeOfDay, totalMinutesWatched — matches production kidsafetv.com schema)
 - `GET /api/caregivers/invite/:token` — validate a caregiver invite
 - `POST /api/caregivers/accept` — accept a caregiver invite
 

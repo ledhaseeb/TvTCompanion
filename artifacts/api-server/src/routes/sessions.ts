@@ -1,8 +1,12 @@
 import { Router, type IRouter } from "express";
-import { eq, and, isNull } from "drizzle-orm";
-import { db, sessionsTable, videosTable, watchHistoryTable } from "@workspace/db";
+import { eq, and, isNull, sql } from "drizzle-orm";
+import { db, sessionsTable, videosTable, watchHistoryTable, childrenTable, usersTable } from "@workspace/db";
 import { authMiddleware, type AuthRequest } from "../middlewares/auth";
 import type { Response } from "express";
+
+function getOwnerId(user: { id: string; role: string; parentAccountId: string | null }): string {
+  return user.role === "caregiver" && user.parentAccountId ? user.parentAccountId : user.id;
+}
 
 type Video = typeof videosTable.$inferSelect;
 
@@ -302,40 +306,91 @@ router.post("/sessions", authMiddleware, async (req: AuthRequest, res: Response)
     return;
   }
 
-  const { childIds, totalDurationSeconds, taperMode, flatlineLevel, includeWindDown, finishMode } = req.body;
-
-  if (!childIds || !totalDurationSeconds || !taperMode) {
-    res.status(400).json({ error: "Missing required fields" });
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.userId));
+  if (!user) {
+    res.status(401).json({ error: "User not found" });
     return;
+  }
+
+  const ownerId = getOwnerId(user);
+  const { childIds, taperMode, flatlineLevel, includeWindDown, finishMode, feedbackRequired, force } = req.body;
+
+  if (!childIds || !Array.isArray(childIds) || childIds.length === 0) {
+    res.status(400).json({ error: "Missing required field: childIds" });
+    return;
+  }
+
+  for (const cid of childIds) {
+    const [child] = await db.select().from(childrenTable).where(eq(childrenTable.id, cid));
+    if (!child || child.userId !== ownerId) {
+      res.status(403).json({ error: "One or more children do not belong to your account" });
+      return;
+    }
   }
 
   const activeSessions = await db
     .select()
     .from(sessionsTable)
     .where(and(
-      eq(sessionsTable.userId, req.userId),
       eq(sessionsTable.status, "active"),
       isNull(sessionsTable.endTime),
     ));
 
-  if (activeSessions.length > 0) {
-    for (const session of activeSessions) {
-      await db
-        .update(sessionsTable)
-        .set({ status: "ended", endTime: new Date() })
-        .where(eq(sessionsTable.id, session.id));
+  const conflicting = activeSessions.filter(s => {
+    const sChildIds = s.childIds || [];
+    return childIds.some((cid: string) => sChildIds.includes(cid));
+  });
+
+  if (conflicting.length > 0) {
+    if (force === true) {
+      for (const session of conflicting) {
+        const elapsed = Math.floor((Date.now() - new Date(session.startTime).getTime()) / 1000);
+        await db
+          .update(sessionsTable)
+          .set({
+            status: "ended",
+            endTime: new Date(),
+            totalDurationSeconds: elapsed,
+            totalMinutesWatched: String(Math.round(elapsed / 60)),
+          })
+          .where(eq(sessionsTable.id, session.id));
+      }
+    } else {
+      const conflict = conflicting[0];
+      const conflictChildIds = (conflict.childIds || []).filter((cid: string) => childIds.includes(cid));
+      const conflictChildren: string[] = [];
+      for (const cid of conflictChildIds) {
+        const [child] = await db.select().from(childrenTable).where(eq(childrenTable.id, cid));
+        if (child) conflictChildren.push(child.name);
+      }
+
+      const [conflictUser] = await db.select().from(usersTable).where(eq(usersTable.id, conflict.userId));
+      const userName = conflictUser?.displayName || "another user";
+
+      res.status(409).json({
+        error: "Session conflict",
+        message: `${conflictChildren.join(", ")} already ${conflictChildren.length === 1 ? "has" : "have"} an active session started by ${userName}`,
+        activeSession: {
+          id: conflict.id,
+          userId: conflict.userId,
+          userName,
+          childIds: conflictChildIds,
+        },
+      });
+      return;
     }
   }
 
   const [session] = await db
     .insert(sessionsTable)
     .values({
-      userId: req.userId,
+      userId: ownerId,
       childIds,
-      taperMode,
+      taperMode: taperMode || "taper_down",
       flatlineLevel: flatlineLevel || 3,
       includeWindDown: includeWindDown ? 1 : 0,
       finishMode: finishMode || "soft",
+      feedbackRequired: feedbackRequired ?? 1,
     })
     .returning();
 
@@ -345,12 +400,14 @@ router.post("/sessions", authMiddleware, async (req: AuthRequest, res: Response)
     childIds: session.childIds,
     startTime: session.startTime.toISOString(),
     endTime: null,
+    totalDurationSeconds: 0,
     totalMinutesWatched: 0,
     status: session.status,
     taperMode: session.taperMode,
     flatlineLevel: session.flatlineLevel,
     includeWindDown: session.includeWindDown,
     finishMode: session.finishMode,
+    feedbackRequired: session.feedbackRequired,
   });
 });
 
@@ -360,16 +417,36 @@ router.patch("/sessions/:id", authMiddleware, async (req: AuthRequest, res: Resp
     return;
   }
 
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.userId));
+  if (!user) {
+    res.status(401).json({ error: "User not found" });
+    return;
+  }
+
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const { endedAt, totalDurationSeconds } = req.body;
+
+  const [existingSession] = await db.select().from(sessionsTable).where(eq(sessionsTable.id, raw));
+  if (!existingSession || (existingSession.userId !== user.id && existingSession.userId !== getOwnerId(user))) {
+    res.status(404).json({ error: "Session not found" });
+    return;
+  }
+
+  const { endedAt, totalDurationSeconds, feedbackRequired, feedbackCompletedAt } = req.body;
 
   const updates: Record<string, unknown> = {};
   if (endedAt) {
-    updates.endTime = new Date(endedAt);
+    updates.endTime = typeof endedAt === "string" ? new Date(endedAt) : endedAt;
     updates.status = "ended";
   }
   if (totalDurationSeconds != null) {
+    updates.totalDurationSeconds = totalDurationSeconds;
     updates.totalMinutesWatched = String(Math.round(totalDurationSeconds / 60));
+  }
+  if (feedbackRequired != null) {
+    updates.feedbackRequired = feedbackRequired;
+  }
+  if (feedbackCompletedAt) {
+    updates.feedbackCompletedAt = typeof feedbackCompletedAt === "string" ? new Date(feedbackCompletedAt) : feedbackCompletedAt;
   }
 
   const [session] = await db
@@ -378,23 +455,20 @@ router.patch("/sessions/:id", authMiddleware, async (req: AuthRequest, res: Resp
     .where(eq(sessionsTable.id, raw))
     .returning();
 
-  if (!session) {
-    res.status(404).json({ error: "Session not found" });
-    return;
-  }
-
   res.json({
     id: session.id,
     userId: session.userId,
     childIds: session.childIds,
     startTime: session.startTime.toISOString(),
     endTime: session.endTime?.toISOString() || null,
+    totalDurationSeconds: session.totalDurationSeconds,
     totalMinutesWatched: Number(session.totalMinutesWatched),
     status: session.status,
     taperMode: session.taperMode,
     flatlineLevel: session.flatlineLevel,
     includeWindDown: session.includeWindDown,
     finishMode: session.finishMode,
+    feedbackRequired: session.feedbackRequired,
   });
 });
 

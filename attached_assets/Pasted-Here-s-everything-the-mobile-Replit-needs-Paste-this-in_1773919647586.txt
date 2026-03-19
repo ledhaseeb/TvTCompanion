@@ -1,0 +1,235 @@
+Here's everything the mobile Replit needs. Paste this into their chat:
+
+1. POST /api/sessions — Create a new watching session
+app.post("/api/sessions", authenticateUser, async (req, res) => {
+  const user = await storage.getUserByFirebaseUid(req.user.uid);
+  const childIds = req.body.childIds; // string[]
+  if (childIds && childIds.length > 0) {
+    // Verify all children belong to this user's family
+    // (caregivers use their linked parent's ID via getOwnerId)
+    const ownerId = getOwnerId(user); // caregiver → parentAccountId, else → user.id
+    for (const cid of childIds) {
+      const child = await storage.getChild(cid);
+      if (!child || child.userId !== ownerId) {
+        return res.status(403).json({ error: 'One or more children do not belong to your account' });
+      }
+    }
+    // Check for active session conflict
+    const activeSessions = await storage.getActiveSessionsByChildIds(childIds);
+    if (activeSessions.length > 0) {
+      const force = req.body.force === true; // boolean
+      if (force) {
+        // End all conflicting sessions
+        for (const activeSession of activeSessions) {
+          await storage.updateSession(activeSession.id, {
+            endedAt: new Date(),
+            totalDurationSeconds: Math.floor((Date.now() - new Date(activeSession.startedAt).getTime()) / 1000),
+          });
+        }
+      } else {
+        // Return 409 conflict
+        const conflict = activeSessions[0];
+        const conflictChildIds = conflict.childIds.filter(cid => childIds.includes(cid));
+        const conflictChildren = [];
+        for (const cid of conflictChildIds) {
+          const child = await storage.getChild(cid);
+          if (child) conflictChildren.push(child.name);
+        }
+        return res.status(409).json({
+          error: 'Session conflict',
+          message: `${conflictChildren.join(', ')} already ${conflictChildren.length === 1 ? 'has' : 'have'} an active session started by ${conflict.userName || 'another user'}`,
+          activeSession: { id: conflict.id, userId: conflict.userId, userName: conflict.userName, childIds: conflictChildIds },
+        });
+      }
+    }
+  }
+  // Store session under parent account ID (not caregiver ID)
+  const sessionOwnerId = getOwnerId(user);
+  const sessionData = insertSessionSchema.parse({
+    ...req.body,
+    userId: sessionOwnerId,
+  });
+  const session = await storage.createSession(sessionData);
+  res.status(201).json(session);
+});
+req.body fields:
+
+{
+  childIds: string[],          // REQUIRED — array of child UUIDs
+  feedbackRequired?: number,   // optional, default 1 (1 = needs feedback, 0 = not required)
+  force?: boolean,             // optional — set true to override active session conflict
+}
+Inserted into sessions table:
+
+id — auto-generated UUID
+userId — set to parent account ID (not the requesting user if they're a caregiver)
+childIds — from req.body
+startedAt — auto-set to now()
+endedAt — null
+totalDurationSeconds — default 0
+feedbackRequired — from req.body or default 1
+Response: Full session object (201)
+
+2. PATCH /api/sessions/:id — Update/end a session
+app.patch("/api/sessions/:id", authenticateUser, async (req, res) => {
+  const { id } = req.params;
+  const user = await storage.getUserByFirebaseUid(req.user.uid);
+  // Verify session belongs to user (direct or via caregiver link)
+  const existingSession = await storage.getSession(id);
+  if (!existingSession || (existingSession.userId !== user.id && existingSession.userId !== getOwnerId(user))) {
+    return res.status(404).json({ error: 'Session not found' });
+  }
+  // Convert endedAt string to Date if present
+  const updateData = { ...req.body };
+  if (updateData.endedAt && typeof updateData.endedAt === 'string') {
+    updateData.endedAt = new Date(updateData.endedAt);
+  }
+  const session = await storage.updateSession(id, updateData);
+  res.json(session);
+});
+req.body fields (all optional, partial update):
+
+{
+  endedAt?: string | Date,           // ISO string or Date — when session ended
+  totalDurationSeconds?: number,     // total seconds watched
+  feedbackRequired?: number,         // 0 or 1
+  feedbackCompletedAt?: string | Date,
+}
+Typical "end session" call:
+
+{
+  "endedAt": "2026-03-19T14:30:00.000Z",
+  "totalDurationSeconds": 1800
+}
+Response: Updated session object (200)
+
+3. POST /api/watch-history — Record a video watch event
+app.post("/api/watch-history", authenticateUser, async (req, res) => {
+  const historyData = insertWatchHistorySchema.parse(req.body);
+  const history = await storage.createWatchHistory(historyData);
+  res.status(201).json(history);
+});
+req.body fields (validated by insertWatchHistorySchema):
+
+{
+  sessionId: string,           // REQUIRED — UUID of the active session
+  videoId: string,             // REQUIRED — UUID of the video watched
+  childIds: string[],          // REQUIRED — array of child UUIDs who watched
+  durationSeconds: number,     // REQUIRED — how long they actually watched (seconds)
+  stimulationLevel: number,    // REQUIRED — cached stim level (0-5) for analytics
+}
+Inserted into watch_history table:
+
+id — auto-generated UUID
+sessionId — from req.body
+videoId — from req.body
+childIds — from req.body
+watchedAt — auto-set to now()
+durationSeconds — from req.body
+stimulationLevel — from req.body
+Response: Full watch history entry (201)
+
+4. POST /api/feedback/:sessionId/complete — Submit post-session behavior feedback
+app.post("/api/feedback/:sessionId/complete", authenticateUser, async (req, res) => {
+  const { sessionId } = req.params;
+  const user = await storage.getUserByFirebaseUid(req.user.uid);
+  const session = await storage.getSession(sessionId);
+  if (!session || (session.userId !== user.id && session.userId !== getOwnerId(user))) {
+    return res.status(404).json({ error: 'Session not found' });
+  }
+  // Zod validation
+  const completeSchema = z.object({
+    skipped: z.boolean().optional(),
+    behaviorRating: z.enum(['great', 'okay', 'upset', 'tantrum']).optional(),
+    childId: z.string().optional(),
+    behaviorRatings: z.array(z.object({
+      childId: z.string(),
+      behaviorRating: z.enum(['great', 'okay', 'upset', 'tantrum']),
+    })).optional(),
+    participationPcts: z.record(z.string(), z.number().min(0).max(100)).optional(),
+  });
+  const { skipped, behaviorRating, childId, behaviorRatings, participationPcts } = completeSchema.parse(req.body);
+  // Mark session feedback as complete (sets feedbackCompletedAt)
+  await storage.markSessionFeedbackComplete(sessionId);
+  const now = new Date();
+  const hours = now.getHours();
+  const timeOfDay = hours < 12 ? 'morning' : hours < 17 ? 'afternoon' : 'evening';
+  const baseMins = Math.round((session.totalDurationSeconds || 0) / 60);
+  // Option A: Group session — array of per-child ratings
+  if (behaviorRatings && behaviorRatings.length > 0) {
+    for (const rating of behaviorRatings) {
+      const child = await storage.getChild(rating.childId);
+      if (child && (child.userId === user.id || child.userId === getOwnerId(user))) {
+        const pct = participationPcts?.[rating.childId] ?? 100;
+        await storage.createSessionFeedback({
+          sessionId,
+          childId: rating.childId,
+          behaviorRating: rating.behaviorRating,
+          wasOverride: 0,
+          timeOfDay,
+          totalMinutesWatched: Math.round(baseMins * pct / 100),
+        });
+      }
+    }
+  }
+  // Option B: Single child — legacy format
+  else if (behaviorRating && childId) {
+    const child = await storage.getChild(childId);
+    if (child && (child.userId === user.id || child.userId === getOwnerId(user))) {
+      const pct = participationPcts?.[childId] ?? 100;
+      await storage.createSessionFeedback({
+        sessionId,
+        childId,
+        behaviorRating,
+        wasOverride: 0,
+        timeOfDay,
+        totalMinutesWatched: Math.round(baseMins * pct / 100),
+      });
+    }
+  }
+  res.json({ success: true });
+});
+req.body fields — two formats supported:
+
+Format A: Group session (multiple children):
+
+{
+  "behaviorRatings": [
+    { "childId": "uuid-1", "behaviorRating": "great" },
+    { "childId": "uuid-2", "behaviorRating": "okay" }
+  ],
+  "participationPcts": {
+    "uuid-1": 100,
+    "uuid-2": 75
+  }
+}
+Format B: Single child (legacy):
+
+{
+  "childId": "uuid-1",
+  "behaviorRating": "great"
+}
+Format C: Skipped feedback:
+
+{
+  "skipped": true
+}
+Behavior rating values: "great", "okay", "upset", "tantrum"
+
+Inserted into session_feedback table (one row per child):
+
+id — auto-generated UUID
+sessionId — from URL param
+childId — from req.body
+behaviorRating — from req.body
+wasOverride — always 0
+timeOfDay — computed from server clock: "morning" / "afternoon" / "evening"
+totalMinutesWatched — session.totalDurationSeconds / 60 * participationPct / 100
+Response: { success: true } (200)
+
+Helper: getOwnerId
+This is important for caregiver support — all data writes use the parent's ID, not the caregiver's:
+
+function getOwnerId(user: { id: string; role: string; parentAccountId?: string | null }): string {
+  return user.role === 'caregiver' && user.parentAccountId ? user.parentAccountId : user.id;
+}
