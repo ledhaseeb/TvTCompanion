@@ -1,0 +1,66 @@
+Creating new worker instance
+AMD, 4 vCPUs, 16 GB RAM
+
+Using image "ubuntu-22.04-jdk-11-ndk-21.4.7075529" based on "ubuntu-2204-jammy-v20220810"
+
+Installed software:
+- NDK 21.4.7075529
+- Node.js 18.18.0
+- Bun 1.0.14
+- Yarn 1.22.19
+- pnpm 8.7.5
+- npm 9.8.1
+- Java 11
+- node-gyp 10.0.1
+
+Project environment variables:
+  __API_SERVER_URL=https://api.expo.dev/
+  EXPO_PUBLIC_API_URL=https://5695f896-4ef8-48ce-9292-73578d94d4b4-00-emt8n6x0r1bl.riker.replit.dev
+  EXPO_PUBLIC_CAST_APP_ID=0F5E0B59
+  EXPO_PUBLIC_FIREBASE_API_KEY=AIzaSyBJY4oWuqCCWv73Q3UIF4aLhVWwbZvn9Lk
+  EXPO_PUBLIC_FIREBASE_PROJECT_ID=tvtantrum-yt-app
+  EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=tvtantrum-yt-app.firebaseapp.com
+  EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=696904036193-ao086i0ovmpdc45clrqq76m0121hi57r.apps.googleusercontent.com
+
+Environment secrets:
+  EXPO_TOKEN=********
+
+EAS Build environment variables:
+  SHELL=/bin/sh
+  NVM_INC=/home/expo/.nvm/versions/node/v18.18.0/include/node
+  JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
+  PWD=/usr/local/eas-build-worker
+  LOGNAME=expo
+  SYSTEMD_EXEC_PID=935
+  HOME=/home/expo
+  LANG=en_US.UTF-8
+  INVOCATION_ID=0784f5f0a1e744f2829451e402d4dab4
+  ANDROID_NDK_HOME=/home/expo/Android/Sdk/ndk/21.4.7075529
+  NVM_DIR=/home/expo/.nvm
+  ANDROID_HOME=/home/expo/Android/Sdk
+  USER=expo
+  SHLVL=0
+  ANDROID_SDK_ROOT=/home/expo/Android/Sdk
+  JOURNAL_STREAM=8:18518
+  PATH=/home/expo/workingdir/bin:/home/expo/.nvm/versions/node/v18.18.0/bin:/opt/bundletool:/home/expo/Android/Sdk/build-tools/29.0.3:/home/expo/Android/Sdk/ndk/21.4.7075529:/home/expo/Android/Sdk/cmdline-tools/tools/bin:/home/expo/Android/Sdk/tools:/home/expo/Android/Sdk/tools/bin:/home/expo/Android/Sdk/platform-tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin:/home/expo/.bun/bin
+  LOGGER_LEVEL=info
+  NVM_BIN=/home/expo/.nvm/versions/node/v18.18.0/bin
+  EAS_BUILD_WORKER_DIR=/home/expo/eas-build-worker
+  _=/home/expo/.nvm/versions/node/v18.18.0/bin/node
+  CI=1
+  MAESTRO_DRIVER_STARTUP_TIMEOUT=120000
+  MAESTRO_CLI_NO_ANALYTICS=1
+  EAS_BUILD=true
+  EAS_BUILD_RUNNER=eas-build
+  EAS_BUILD_PLATFORM=android
+  NVM_NODEJS_ORG_MIRROR=http://nodejs.production.caches.eas-build.internal
+  EAS_BUILD_PROFILE=preview
+  EAS_BUILD_GIT_COMMIT_HASH=c6af5d6d9f3ea35e33fb858b37f62d38e7977d70
+  EAS_BUILD_ID=384109b5-1c7d-4a37-8f7c-0f7eef132647
+  EAS_BUILD_WORKINGDIR=/home/expo/workingdir/build
+  EAS_BUILD_PROJECT_ID=aa6bf470-e46f-4e73-ba53-65b18952a7d3
+  EAS_BUILD_MAVEN_CACHE_URL=http://maven.production.caches.eas-build.internal
+  GRADLE_OPTS=-Dorg.gradle.jvmargs="-XX:MaxMetaspaceSize=1g -Xmx4g -XX:+HeapDumpOnOutOfMemoryError -Dfile.encoding=UTF-8" -Dorg.gradle.parallel=true -Dorg.gradle.daemon=false
+  __EAS_BUILD_ENVS_DIR=/home/expo/workingdir/env
+
+Builder is ready, starting build
