@@ -7,6 +7,7 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
+      "installModulesCommand": "pnpm install --no-frozen-lockfile",
       "android": {
         "buildType": "apk"
       },
@@ -21,6 +22,7 @@
     },
     "preview": {
       "distribution": "internal",
+      "installModulesCommand": "pnpm install --no-frozen-lockfile",
       "android": {
         "buildType": "apk"
       },
@@ -35,6 +37,7 @@
     },
     "production": {
       "autoIncrement": true,
+      "installModulesCommand": "pnpm install --no-frozen-lockfile",
       "env": {
         "EXPO_PUBLIC_API_URL": "https://5695f896-4ef8-48ce-9292-73578d94d4b4-00-emt8n6x0r1bl.riker.replit.dev",
         "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyBJY4oWuqCCWv73Q3UIF4aLhVWwbZvn9Lk",
