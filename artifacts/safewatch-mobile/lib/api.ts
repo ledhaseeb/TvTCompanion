@@ -1,7 +1,7 @@
 const API_URL = process.env.EXPO_PUBLIC_API_URL
   || (process.env.EXPO_PUBLIC_DOMAIN
     ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
-    : "http://localhost:5000");
+    : "https://www.kidsafetv.com");
 
 export function getApiUrl(): string {
   return API_URL;

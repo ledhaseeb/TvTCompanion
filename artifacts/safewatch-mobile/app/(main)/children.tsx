@@ -19,6 +19,27 @@ import { colors, spacing, borderRadius } from "@/constants/colors";
 import type { Child, TaperMode } from "@/lib/types";
 import { TAPER_MODES } from "@/lib/types";
 
+function normalizeChild(c: Record<string, unknown>): Child {
+  return {
+    id: (c.id as string) || "",
+    userId: (c.userId || c.user_id || "") as string,
+    name: (c.name as string) || "",
+    birthMonth: (c.birthMonth ?? c.birth_month ?? 1) as number,
+    birthYear: (c.birthYear ?? c.birth_year ?? 2020) as number,
+    entertainmentMinutes: (c.entertainmentMinutes ?? c.entertainment_minutes ?? 60) as number,
+    ageRestrictionOverride: (c.ageRestrictionOverride ?? c.age_restriction_override ?? null) as number | null,
+    favouritesAgeBypass: (c.favouritesAgeBypass ?? c.favourites_age_bypass ?? 0) as number,
+    eveningProtectionEnabled: (c.eveningProtectionEnabled ?? c.evening_protection_enabled ?? 0) as number,
+    eveningProtectionStartHour: (c.eveningProtectionStartHour ?? c.evening_protection_start_hour ?? 18) as number,
+    eveningProtectionMaxStim: (c.eveningProtectionMaxStim ?? c.evening_protection_max_stim ?? 3) as number,
+    sensitivity: (c.sensitivity ?? null) as string | null,
+  };
+}
+
+function normalizeChildren(arr: Record<string, unknown>[]): Child[] {
+  return (arr || []).map(normalizeChild);
+}
+
 const DARK = {
   bg: "#0f1923",
   card: "#1a2a3a",
@@ -65,9 +86,10 @@ export default function StartSessionScreen() {
     data: children = [],
     isLoading,
     error,
-  } = useQuery<Child[]>({
+  } = useQuery<Record<string, unknown>[], Error, Child[]>({
     queryKey: ["/api/children"],
     enabled: !!user,
+    select: (data) => normalizeChildren(data),
   });
 
   if (!hasInitialized && children.length > 0) {

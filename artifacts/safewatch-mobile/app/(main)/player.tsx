@@ -228,12 +228,11 @@ export default function PlayerScreen() {
           const endedIndex = (msg as any).index ?? castVideoIndex;
           const endedVideo = castPlaylistRef.current[endedIndex];
           if (endedVideo) {
-            const videoId = endedVideo.youtubeId || extractYoutubeIdFromThumbnail(endedVideo.thumbnailUrl) || "";
-            const dedupKey = `${session.sessionId}-${videoId}-${endedIndex}`;
+            const dedupKey = `${session.sessionId}-${endedVideo.id}-${endedIndex}`;
             if (recordedVideoEndRef.current !== dedupKey) {
               recordedVideoEndRef.current = dedupKey;
               const watchedSecs = Math.max(Math.floor(castVideoCurrentTimeRef.current), 1);
-              submitWatchHistory(videoId, watchedSecs, endedVideo.stimulationLevel);
+              submitWatchHistory(endedVideo.id, watchedSecs, endedVideo.stimulationLevel);
             }
           }
           castVideoCurrentTimeRef.current = 0;
@@ -317,17 +316,16 @@ export default function PlayerScreen() {
     if (playing && playStartRef.current !== null) {
       actualWatched += Math.floor((Date.now() - playStartRef.current) / 1000);
     }
-    submitWatchHistory(currentVideo.youtubeId, actualWatched, currentVideo.stimulationLevel);
+    submitWatchHistory(currentVideo.id, actualWatched, currentVideo.stimulationLevel);
   };
 
   const handleSessionEnd = useCallback(async () => {
     if (isCasting) {
       const curCastVideo = castPlaylistRef.current[castVideoIndex];
       if (curCastVideo && session.sessionId) {
-        const videoId = curCastVideo.youtubeId || extractYoutubeIdFromThumbnail(curCastVideo.thumbnailUrl) || "";
         const watchedSecs = Math.max(Math.floor(castVideoCurrentTimeRef.current), 0);
         if (watchedSecs > 0) {
-          await submitWatchHistory(videoId, watchedSecs, curCastVideo.stimulationLevel);
+          await submitWatchHistory(curCastVideo.id, watchedSecs, curCastVideo.stimulationLevel);
         }
       }
       try { await stopMedia(); } catch {}
@@ -337,8 +335,7 @@ export default function PlayerScreen() {
       if (curVideo && session.sessionId) {
         const actualWatched = videoWatchedRef.current;
         if (actualWatched > 0) {
-          const videoId = curVideo.youtubeId || extractYoutubeIdFromThumbnail(curVideo.thumbnailUrl) || "";
-          await submitWatchHistory(videoId, actualWatched, curVideo.stimulationLevel);
+          await submitWatchHistory(curVideo.id, actualWatched, curVideo.stimulationLevel);
         }
       }
     }
@@ -364,9 +361,8 @@ export default function PlayerScreen() {
     if (isCasting) {
       const curCastVideo = castPlaylistRef.current[castVideoIndex];
       if (curCastVideo) {
-        const videoId = curCastVideo.youtubeId || extractYoutubeIdFromThumbnail(curCastVideo.thumbnailUrl) || "";
         const watchedSecs = Math.max(Math.floor(castVideoCurrentTimeRef.current), 1);
-        submitWatchHistory(videoId, watchedSecs, curCastVideo.stimulationLevel);
+        submitWatchHistory(curCastVideo.id, watchedSecs, curCastVideo.stimulationLevel);
       }
       castVideoCurrentTimeRef.current = 0;
       skipVideo();

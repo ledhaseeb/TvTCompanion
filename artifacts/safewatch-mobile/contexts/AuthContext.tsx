@@ -20,6 +20,18 @@ import { apiRequest } from "@/lib/query-client";
 import { apiUrl } from "@/lib/api";
 import type { AppUser } from "@/lib/types";
 
+function normalizeUser(u: Record<string, unknown>): AppUser {
+  return {
+    id: (u.id as string) || "",
+    firebaseUid: (u.firebaseUid || u.firebase_uid || "") as string,
+    email: (u.email as string) || "",
+    displayName: (u.displayName ?? u.display_name ?? null) as string | null,
+    role: (u.role as string) || "parent",
+    parentAccountId: (u.parentAccountId ?? u.parent_account_id ?? null) as string | null,
+    isFoundingMember: (u.isFoundingMember ?? u.is_founding_member ?? 0) as number | undefined,
+  };
+}
+
 interface AuthContextType {
   user: AppUser | null;
   isLoading: boolean;
@@ -66,7 +78,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const getRes = await fetch(apiUrl("/api/users/me"), { headers });
 
       if (getRes.ok) {
-        return await getRes.json();
+        const raw = await getRes.json();
+        return normalizeUser(raw);
       }
 
       let email = "";
@@ -86,7 +99,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({ email, displayName }),
       });
       if (createRes.ok) {
-        return await createRes.json();
+        const raw = await createRes.json();
+        return normalizeUser(raw);
       }
 
       const errText = await createRes.text().catch(() => "");

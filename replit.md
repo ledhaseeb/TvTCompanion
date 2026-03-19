@@ -102,12 +102,17 @@ Expo React Native companion app for SafeWatch — manages children's screen time
 - `contexts/SessionContext.tsx` — Active session state provider
 - `contexts/CastContext.tsx` — Chromecast integration (react-native-google-cast with Expo Go fallback)
 
+#### API Backend
+
+The mobile app calls the production web API at `https://www.kidsafetv.com` (same Firebase project `tvtantrum-yt-app`, shared PostgreSQL database). All API responses are normalized (snake_case → camelCase) in `normalizeUser()`, `normalizeChild()`, and `normalizeVideo()` to handle both field name formats. Watch history calls send the database UUID (`video.id`), not the YouTube video ID.
+
 #### Environment Variables (Mobile)
 
+- `EXPO_PUBLIC_API_URL` — API base URL (set to `https://www.kidsafetv.com` in all EAS build profiles)
 - `EXPO_PUBLIC_FIREBASE_API_KEY` — Firebase web API key
 - `EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN` — Firebase auth domain
 - `EXPO_PUBLIC_FIREBASE_PROJECT_ID` — Firebase project ID
-- `EXPO_PUBLIC_DOMAIN` — auto-set to `REPLIT_DEV_DOMAIN` for API calls
+- `EXPO_PUBLIC_DOMAIN` — fallback for API URL (auto-set to `REPLIT_DEV_DOMAIN`)
 - `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` — Google OAuth web client ID (from Firebase console, needed for native Google Sign-In)
 - `EXPO_PUBLIC_CAST_APP_ID` — Google Cast Developer Console App ID for custom Chromecast receiver (set to registered receiver ID)
 
