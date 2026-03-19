@@ -88,6 +88,9 @@ export async function signInWithGoogleToken(
 
 let googleSignInConfigured = false;
 
+// NOTE: Native Google Sign-In requires the EAS build signing key SHA-1
+// fingerprint to be registered in Firebase Console → Android app settings.
+// See GOOGLE_SIGNIN_SETUP.md for full instructions.
 function ensureGoogleSignInConfigured() {
   if (googleSignInConfigured) return;
   const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
@@ -102,14 +105,24 @@ function ensureGoogleSignInConfigured() {
 
 export { statusCodes as GoogleSignInStatusCodes };
 
+class GoogleSignInError extends Error {
+  code: string;
+  constructor(message: string, code: string) {
+    super(message);
+    this.name = "GoogleSignInError";
+    this.code = code;
+  }
+}
+
 export async function signInWithGoogle(): Promise<string> {
   ensureGoogleSignInConfigured();
   await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
   const response = await GoogleSignin.signIn();
   if (response.type === "cancelled") {
-    const cancelErr = new Error("Sign-in was cancelled");
-    (cancelErr as any).code = String(statusCodes.SIGN_IN_CANCELLED);
-    throw cancelErr;
+    throw new GoogleSignInError(
+      "Sign-in was cancelled",
+      String(statusCodes.SIGN_IN_CANCELLED),
+    );
   }
   const googleIdToken = response.data?.idToken;
   if (!googleIdToken) {
