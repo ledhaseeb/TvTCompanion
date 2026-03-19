@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "696904036193",
+    "project_id": "tvtantrum-yt-app",
+    "storage_bucket": "tvtantrum-yt-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:696904036193:android:47ba2fdbdb491721c71f20",
+        "android_client_info": {
+          "package_name": "com.safewatch.mobile"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "696904036193-ao086i0ovmpdc45clrqq76m0121hi57r.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCuJfb-P6EMJZUbEm6S4rELFs2kd4xX2a0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "696904036193-ao086i0ovmpdc45clrqq76m0121hi57r.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
