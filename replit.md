@@ -68,7 +68,7 @@ Express 5 API server. Routes live in `src/routes/` and use `@workspace/api-zod` 
 
 - `GET/POST /api/users/me` — get or create user profile (Firebase auth required)
 - `GET /api/children` — list children for the authenticated user
-- `POST /api/sessions/playlist` — generate a playlist (calming=stim 0, entertainment=stim 1-5, filters out isEmbeddable=0, series-level shuffle)
+- `POST /api/sessions/playlist` — generate a playlist (calming=stim 0, entertainment=stim 1-5, filters out isEmbeddable=0 + disabled channels/series, series-level shuffle)
 - `POST /api/sessions/playlist/replace` — replace a video at a given index (taper-mode-aware stim range, series diversity)
 - `POST /api/sessions/playlist/replace-calming` — replace the wind-down video
 - `POST /api/sessions` — create a new viewing session (supports 409 conflict detection + force override, caregiver ownership via getOwnerId)
@@ -134,6 +134,7 @@ Database layer using Drizzle ORM with PostgreSQL. Exports a Drizzle client insta
 - `src/schema/watchHistory.ts` — watch history entries per session
 - `src/schema/feedback.ts` — session feedback + behavior ratings per child
 - `src/schema/caregiverInvites.ts` — caregiver invitation tokens
+- `src/schema/channels.ts` — channels table (isEnabled flag for show visibility) and series table (isEnabled flag)
 
 Production migrations are handled by Replit when publishing. In development, we just use `pnpm --filter @workspace/db run push`, and we fallback to `pnpm --filter @workspace/db run push-force`.
 

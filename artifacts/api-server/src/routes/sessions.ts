@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, and, isNull, sql } from "drizzle-orm";
-import { db, sessionsTable, videosTable, watchHistoryTable, childrenTable, usersTable } from "@workspace/db";
+import { db, sessionsTable, videosTable, watchHistoryTable, childrenTable, usersTable, channelsTable, seriesTable } from "@workspace/db";
 import { authMiddleware, type AuthRequest } from "../middlewares/auth";
 import type { Response } from "express";
 
@@ -58,11 +58,37 @@ function seriesLevelShuffle(videos: Video[]): Video[] {
   return result;
 }
 
-function getVisibleVideos(allVideos: Video[]): Video[] {
-  return allVideos.filter(v =>
-    v.isPublished === 1 &&
-    v.isEmbeddable !== 0
-  );
+async function getDisabledIds(): Promise<{
+  channelIds: Set<string>;
+  ytChannelIds: Set<string>;
+  seriesIds: Set<string>;
+}> {
+  const [disabledChannels, disabledSeries] = await Promise.all([
+    db.select({ id: channelsTable.id, youtubeChannelId: channelsTable.youtubeChannelId })
+      .from(channelsTable).where(eq(channelsTable.isEnabled, 0)),
+    db.select({ id: seriesTable.id }).from(seriesTable).where(eq(seriesTable.isEnabled, 0)),
+  ]);
+  return {
+    channelIds: new Set(disabledChannels.map(c => c.id)),
+    ytChannelIds: new Set(
+      disabledChannels.map(c => c.youtubeChannelId).filter((id): id is string => id != null),
+    ),
+    seriesIds: new Set(disabledSeries.map(s => s.id)),
+  };
+}
+
+function getVisibleVideos(
+  allVideos: Video[],
+  disabled: { channelIds: Set<string>; ytChannelIds: Set<string>; seriesIds: Set<string> },
+): Video[] {
+  return allVideos.filter(v => {
+    if (v.isPublished !== 1) return false;
+    if (v.isEmbeddable === 0) return false;
+    if (v.channelId && disabled.channelIds.has(v.channelId)) return false;
+    if (v.youtubeChannelId && disabled.ytChannelIds.has(v.youtubeChannelId)) return false;
+    if (v.seriesId && disabled.seriesIds.has(v.seriesId)) return false;
+    return true;
+  });
 }
 
 function formatVideo(v: Video) {
@@ -103,8 +129,11 @@ router.post("/sessions/playlist", authMiddleware, async (req: AuthRequest, res: 
 
   const totalSeconds = sessionMinutes * 60;
 
-  const allVideos = await db.select().from(videosTable);
-  const visibleVideos = getVisibleVideos(allVideos);
+  const [allVideos, disabled] = await Promise.all([
+    db.select().from(videosTable),
+    getDisabledIds(),
+  ]);
+  const visibleVideos = getVisibleVideos(allVideos, disabled);
 
   if (visibleVideos.length === 0) {
     res.json({ playlist: [], calmingVideos: [], replacementCandidates: {} });
@@ -193,8 +222,11 @@ router.post("/sessions/playlist/replace", authMiddleware, async (req: AuthReques
     return;
   }
 
-  const allVideos = await db.select().from(videosTable);
-  const visibleVideos = getVisibleVideos(allVideos);
+  const [allVideos, disabled] = await Promise.all([
+    db.select().from(videosTable),
+    getDisabledIds(),
+  ]);
+  const visibleVideos = getVisibleVideos(allVideos, disabled);
   const videoMap = new Map(visibleVideos.map(v => [v.id, v]));
 
   const currentPlaylist = (currentPlaylistVideoIds as string[])
@@ -287,8 +319,11 @@ router.post("/sessions/playlist/replace-calming", authMiddleware, async (req: Au
 
   const { childIds, currentCalmingVideoId } = req.body;
 
-  const allVideos = await db.select().from(videosTable);
-  const visibleVideos = getVisibleVideos(allVideos);
+  const [allVideos, disabled] = await Promise.all([
+    db.select().from(videosTable),
+    getDisabledIds(),
+  ]);
+  const visibleVideos = getVisibleVideos(allVideos, disabled);
 
   const calmingVideos = visibleVideos
     .filter(v => v.stimulationLevel === 0 && v.id !== currentCalmingVideoId);
