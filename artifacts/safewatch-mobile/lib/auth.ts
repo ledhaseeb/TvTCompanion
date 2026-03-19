@@ -5,12 +5,14 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signInWithCredential,
+  signInWithPopup,
   GoogleAuthProvider,
   onIdTokenChanged,
   signOut as firebaseSignOut,
   type Auth,
   type User,
 } from "firebase/auth";
+import { Platform } from "react-native";
 import {
   GoogleSignin,
   statusCodes,
@@ -114,7 +116,16 @@ class GoogleSignInError extends Error {
   }
 }
 
-export async function signInWithGoogle(): Promise<string> {
+async function signInWithGoogleWeb(): Promise<string> {
+  const auth = getFirebaseAuth();
+  const provider = new GoogleAuthProvider();
+  const result = await signInWithPopup(auth, provider);
+  const idToken = await result.user.getIdToken();
+  await setAuthToken(idToken);
+  return idToken;
+}
+
+async function signInWithGoogleNative(): Promise<string> {
   ensureGoogleSignInConfigured();
   await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
   const response = await GoogleSignin.signIn();
@@ -129,6 +140,13 @@ export async function signInWithGoogle(): Promise<string> {
     throw new Error("No ID token returned from Google Sign-In");
   }
   return signInWithGoogleToken(googleIdToken);
+}
+
+export async function signInWithGoogle(): Promise<string> {
+  if (Platform.OS === "web") {
+    return signInWithGoogleWeb();
+  }
+  return signInWithGoogleNative();
 }
 
 export function onTokenRefresh(
