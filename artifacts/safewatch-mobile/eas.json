@@ -7,7 +7,7 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "node": "18.18.0",
+      "node": "22.12.0",
       "pnpm": "10.26.1",
       "android": {
         "buildType": "apk"
@@ -23,7 +23,7 @@
     },
     "preview": {
       "distribution": "internal",
-      "node": "18.18.0",
+      "node": "22.12.0",
       "pnpm": "10.26.1",
       "android": {
         "buildType": "apk"
@@ -39,7 +39,7 @@
     },
     "production": {
       "autoIncrement": true,
-      "node": "18.18.0",
+      "node": "22.12.0",
       "pnpm": "10.26.1",
       "env": {
         "EXPO_PUBLIC_API_URL": "https://5695f896-4ef8-48ce-9292-73578d94d4b4-00-emt8n6x0r1bl.riker.replit.dev",
